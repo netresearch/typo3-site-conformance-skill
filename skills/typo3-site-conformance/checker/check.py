@@ -8,6 +8,7 @@ template must score 100 % on every *repo*-scope rule; *advisory*-scope rules
 Usage:  python3 tools/conformance/check.py [PROJECT_ROOT]
 Exit 0 iff no repo-scope rule fails.
 """
+
 from __future__ import annotations
 
 import json
@@ -85,7 +86,9 @@ class Ctx:
                 continue
             key, _, val = line.partition("=")
             key, val = key.strip(), val.strip()
-            val = re.sub(r"\$\{(\w+)(?::-[^}]*)?\}", lambda m: env.get(m.group(1), ""), val)
+            val = re.sub(
+                r"\$\{(\w+)(?::-[^}]*)?\}", lambda m: env.get(m.group(1), ""), val
+            )
             env[key] = val
         return env
 
@@ -108,7 +111,9 @@ class Ctx:
         try:
             r = subprocess.run(
                 ["git", "-C", str(self.root), "ls-files", "--error-unmatch", rel],
-                capture_output=True, text=True, timeout=10,
+                capture_output=True,
+                text=True,
+                timeout=10,
             )
             return r.returncode == 0
         except (FileNotFoundError, OSError, subprocess.SubprocessError):
@@ -117,8 +122,11 @@ class Ctx:
     def resolve_image(self, img: str) -> str:
         if not img:
             return ""
-        return re.sub(r"\$\{(\w+)(?::-([^}]*))?\}",
-                      lambda m: self.envdist.get(m.group(1), m.group(2) or ""), img)
+        return re.sub(
+            r"\$\{(\w+)(?::-([^}]*))?\}",
+            lambda m: self.envdist.get(m.group(1), m.group(2) or ""),
+            img,
+        )
 
     def service_image(self, name: str) -> str:
         svc = self.services.get(name, {}) or {}
@@ -163,9 +171,9 @@ def settings_secret_free(text: str) -> bool:
     for m in _SECRET_KEY.finditer(text):
         val = m.group(3).strip()
         if not val:
-            continue                       # empty default — fine
+            continue  # empty default — fine
         if val.startswith("%env") or val.startswith("$"):
-            continue                       # environment-sourced, not committed
+            continue  # environment-sourced, not committed
         return False
     return True
 
@@ -187,7 +195,7 @@ def additional_prod_safe(text: str) -> tuple[bool, str]:
     dev_flags = [
         r"\['displayErrors'\]\s*=\s*1\b",
         r"\['debug'\]\s*=\s*true\b",
-        r"\['devIPmask'\]\s*=\s*'\*'",      # literal wildcard, not $env(...,'*')
+        r"\['devIPmask'\]\s*=\s*'\*'",  # literal wildcard, not $env(...,'*')
     ]
     if not any(re.search(p, text) for p in dev_flags):
         return True, "no dev-mode flags in additional.php"
@@ -201,16 +209,53 @@ def additional_prod_safe(text: str) -> tuple[bool, str]:
 # --------------------------------------------------------------------------- #
 # Checks: code -> function(ctx) -> (bool|"ADVISORY", detail)
 # --------------------------------------------------------------------------- #
-def c_struct001(x): return (not x.exists("build/config/system/settings.php") and x.exists("config/system/settings.php"), "config/ at root, no build/config")
-def c_struct002(x): return (settings_secret_free(x.settings), "no secret values in settings.php")
-def c_struct003(x): return (x.exists("config/system/additional.php") and "$_SERVER" in x.additional, "additional.php sources $_SERVER")
-def c_struct004(x): return (x.composer.get("type") == "project" and x.exists("composer.lock"), "type:project + committed composer.lock")
-def c_struct005(x): return (len(list((x.root / "config/sites").glob("*/config.yaml"))) > 0, "config/sites/*/config.yaml present")
+def c_struct001(x):
+    return (
+        not x.exists("build/config/system/settings.php")
+        and x.exists("config/system/settings.php"),
+        "config/ at root, no build/config",
+    )
+
+
+def c_struct002(x):
+    return (settings_secret_free(x.settings), "no secret values in settings.php")
+
+
+def c_struct003(x):
+    return (
+        x.exists("config/system/additional.php") and "$_SERVER" in x.additional,
+        "additional.php sources $_SERVER",
+    )
+
+
+def c_struct004(x):
+    return (
+        x.composer.get("type") == "project" and x.exists("composer.lock"),
+        "type:project + committed composer.lock",
+    )
+
+
+def c_struct005(x):
+    return (
+        len(list((x.root / "config/sites").glob("*/config.yaml"))) > 0,
+        "config/sites/*/config.yaml present",
+    )
+
+
 def c_struct007(x):
     g = x.gitignore
-    ok = "/vendor" in g and "/var/" in g and "/public/" in g and bool(re.search(r"\.(prod|stage)\.env|\.env\.(production|staging)", g))
+    ok = (
+        "/vendor" in g
+        and "/var/" in g
+        and "/public/" in g
+        and bool(re.search(r"\.(prod|stage)\.env|\.env\.(production|staging)", g))
+    )
     return (ok, ".gitignore excludes vendor/var/public + live-env")
-def c_struct008(x): return (not x.exists("build/config"), "no legacy build/config")
+
+
+def c_struct008(x):
+    return (not x.exists("build/config"), "no legacy build/config")
+
 
 def _live_env_files(x):
     pats = re.compile(r"(\.env\.(production|staging|live)$|\.(prod|stage)\.env$)")
@@ -222,6 +267,8 @@ def _live_env_files(x):
             if pats.search(f):
                 found.append(f)
     return found
+
+
 def c_struct006(x):
     found = _live_env_files(x)
     if found:
@@ -231,40 +278,87 @@ def c_struct006(x):
         return (False, ".env is git-tracked")
     return (True, "no committed live-env files")
 
-def c_ciimg001(x): return ("alpine:edge" not in x.dockerfile, "no alpine:edge")
+
+def c_ciimg001(x):
+    return ("alpine:edge" not in x.dockerfile, "no alpine:edge")
+
+
 def c_ciimg002(x):
     name, svc = x.cache_service()
     img = x.resolve_image((svc or {}).get("image", "")) if svc else ""
     return (img.startswith("valkey/valkey"), f"cache image = {img or 'none'}")
+
+
 def c_ciimg003(x):
     app, db = x.service_image("app"), x.service_image("db")
     return (pinned(app) and pinned(db), f"app={app or '-'} db pinned={pinned(db)}")
-def c_ciimg004(x): return c_struct002(x)
+
+
+def c_ciimg004(x):
+    return c_struct002(x)
+
+
 def c_ciimg005(x):
     s = x.settings
-    ok = (re.search(r"'displayErrors'\s*=>\s*0", s) and re.search(r"'debug'\s*=>\s*false", s)
-          and not re.search(r"'devIPmask'\s*=>\s*'\*'", s)
-          and not re.search(r"'trustedHostsPattern'\s*=>\s*'\.\*'", s))
+    ok = (
+        re.search(r"'displayErrors'\s*=>\s*0", s)
+        and re.search(r"'debug'\s*=>\s*false", s)
+        and not re.search(r"'devIPmask'\s*=>\s*'\*'", s)
+        and not re.search(r"'trustedHostsPattern'\s*=>\s*'\.\*'", s)
+    )
     prod_ok, detail = additional_prod_safe(x.additional)
     return (bool(ok) and prod_ok, "no debug/wildcard defaults; " + detail)
-def c_ciimg006(x): return (":latest" not in x.service_image("ofelia"), "ofelia not :latest")
+
+
+def c_ciimg006(x):
+    return (":latest" not in x.service_image("ofelia"), "ofelia not :latest")
+
+
 def c_ciimg007(x):
     targets = set(x.persistent_services()) | {"backup"}
-    missing = [n for n in targets if n in x.services
-               and not (((x.services[n] or {}).get("deploy", {}) or {}).get("resources", {}) or {}).get("limits", {}).get("memory")]
-    return (not missing, "resource limits on all long-running services" if not missing else f"missing limits: {missing}")
+    missing = [
+        n
+        for n in targets
+        if n in x.services
+        and not (
+            ((x.services[n] or {}).get("deploy", {}) or {}).get("resources", {}) or {}
+        )
+        .get("limits", {})
+        .get("memory")
+    ]
+    return (
+        not missing,
+        "resource limits on all long-running services"
+        if not missing
+        else f"missing limits: {missing}",
+    )
+
+
 def c_ciimg008(x):
     for n in ("db", "valkey"):
         if not (x.services.get(n, {}) or {}).get("healthcheck"):
             return (False, f"{n} missing healthcheck")
     return (True, "db & valkey have healthchecks")
+
+
 def c_ciimg009(x):
     offenders = []
     for n, svc in x.services.items():
         for v in (svc or {}).get("volumes", []) or []:
-            if isinstance(v, str) and "/var/run/docker.sock" in v and n != "socket-proxy":
+            if (
+                isinstance(v, str)
+                and "/var/run/docker.sock" in v
+                and n != "socket-proxy"
+            ):
                 offenders.append(n)
-    return (not offenders, "docker.sock only via socket-proxy" if not offenders else f"direct mount: {offenders}")
+    return (
+        not offenders,
+        "docker.sock only via socket-proxy"
+        if not offenders
+        else f"direct mount: {offenders}",
+    )
+
+
 def c_ciimg010(x):
     dev = x.override.get("services", {}) or {}
     bad = []
@@ -273,28 +367,65 @@ def c_ciimg010(x):
         if img and not pinned(img):
             bad.append(n)
     return (not bad, "dev images pinned" if not bad else f"unpinned dev images: {bad}")
-def c_ciimg011(x): return (x.exists("compose.yaml") and x.exists("compose.override.yaml") and not x.exists("docker-compose.yml"), "canonical compose.yaml")
+
+
+def c_ciimg011(x):
+    return (
+        x.exists("compose.yaml")
+        and x.exists("compose.override.yaml")
+        and not x.exists("docker-compose.yml"),
+        "canonical compose.yaml",
+    )
+
+
 def c_ciimg012(x):
     for line in x._text(".env.dist").splitlines():
         s = line.strip()
         if not s.startswith("#") and re.match(r"COMPOSE_FILE\s*=", s):
             return (False, "COMPOSE_FILE overlay chain present")
     return (True, "no COMPOSE_FILE overlay chain")
+
+
 def c_ciimg013(x):
     has_g = "g+s" in x.dockerfile
-    bad = bool(re.search(r"chmod[^\n]*\bug\+s", x.dockerfile)) or bool(re.search(r"chmod[^\n]*\bu\+s\b", x.dockerfile))
+    bad = bool(re.search(r"chmod[^\n]*\bug\+s", x.dockerfile)) or bool(
+        re.search(r"chmod[^\n]*\bu\+s\b", x.dockerfile)
+    )
     return (has_g and not bad, "SGID (g+s) on writable dirs")
+
+
 def c_ciimg014(x):
     text = x._text(".env.dist") + x.pipeline
-    return (":82" not in re.sub(r"[0-9]:82\b", "", text) and "=:82" not in text and "tag: \"82\"" not in text, "no PHP 8.2 runtime")
+    return (
+        ":82" not in re.sub(r"[0-9]:82\b", "", text)
+        and "=:82" not in text
+        and 'tag: "82"' not in text,
+        "no PHP 8.2 runtime",
+    )
+
+
 def c_ciimg015(x):
     d = x.dockerfile
-    ok = all(f"org.opencontainers.image.{k}" in d for k in ("version", "source", "vendor"))
+    ok = all(
+        f"org.opencontainers.image.{k}" in d for k in ("version", "source", "vendor")
+    )
     return (ok, "OCI labels (version/source/vendor)")
 
+
 def c_dro001(x):
-    missing = [n for n in x.persistent_services() if not (x.services[n] or {}).get("healthcheck")]
-    return (not missing, "all persistent services healthchecked" if not missing else f"no healthcheck: {missing}")
+    missing = [
+        n
+        for n in x.persistent_services()
+        if not (x.services[n] or {}).get("healthcheck")
+    ]
+    return (
+        not missing,
+        "all persistent services healthchecked"
+        if not missing
+        else f"no healthcheck: {missing}",
+    )
+
+
 def c_dro002(x):
     for n, svc in x.services.items():
         dep = (svc or {}).get("depends_on")
@@ -312,21 +443,78 @@ def c_dro002(x):
             elif cond != "service_healthy":
                 return (False, f"{n}->{target} not service_healthy ({cond})")
     return (True, "depends_on conditions correct")
+
+
 def c_dro003(x):
-    bad = [n for n in x.persistent_services()
-           if (x.services[n] or {}).get("restart") not in ("unless-stopped", "on-failure", "always")]
-    return (not bad, "restart policy on persistent services" if not bad else f"missing restart: {bad}")
+    bad = [
+        n
+        for n in x.persistent_services()
+        if (x.services[n] or {}).get("restart")
+        not in ("unless-stopped", "on-failure", "always")
+    ]
+    return (
+        not bad,
+        "restart policy on persistent services"
+        if not bad
+        else f"missing restart: {bad}",
+    )
+
+
 def c_dro015(x):
     cfg = x._text("ofelia/config.ini")
     return ("webhook" in cfg.lower(), "ofelia failure webhook configured")
-def c_dro020(x): return (x.exists("compose.yaml") and not x.exists("docker-compose.yml"), "compose.yaml canonical")
 
-def c_ci001(x): return (not re.search(r"ofelia[^\n]*:latest", x._text("compose.yaml")), "ofelia not :latest")
-def c_ci002(x): return ("mount=type=secret" in x.dockerfile and not re.search(r"^ARG\s+COMPOSER_AUTH", x.dockerfile, re.M), "COMPOSER_AUTH via BuildKit secret")
-def c_dro013(x): return (any("restore-verify" in t or ("restore" in t and "verify" in t) for t in x.ci_text.values()), "restore-verify job present")
-def c_sc001(x): return ("composer audit" in x.pipeline_code, "composer audit in pipeline")
-def c_sc002(x): return ("trivy" in x.pipeline_code and "--exit-code 1" in x.pipeline_code, "trivy gate --exit-code 1")
-def c_sc003(x): return (bool(re.search(r"cyclonedx|spdx|syft", x.pipeline_code)), "SBOM generation in pipeline")
+
+def c_dro020(x):
+    return (
+        x.exists("compose.yaml") and not x.exists("docker-compose.yml"),
+        "compose.yaml canonical",
+    )
+
+
+def c_ci001(x):
+    return (
+        not re.search(r"ofelia[^\n]*:latest", x._text("compose.yaml")),
+        "ofelia not :latest",
+    )
+
+
+def c_ci002(x):
+    return (
+        "mount=type=secret" in x.dockerfile
+        and not re.search(r"^ARG\s+COMPOSER_AUTH", x.dockerfile, re.M),
+        "COMPOSER_AUTH via BuildKit secret",
+    )
+
+
+def c_dro013(x):
+    return (
+        any(
+            "restore-verify" in t or ("restore" in t and "verify" in t)
+            for t in x.ci_text.values()
+        ),
+        "restore-verify job present",
+    )
+
+
+def c_sc001(x):
+    return ("composer audit" in x.pipeline_code, "composer audit in pipeline")
+
+
+def c_sc002(x):
+    return (
+        "trivy" in x.pipeline_code and "--exit-code 1" in x.pipeline_code,
+        "trivy gate --exit-code 1",
+    )
+
+
+def c_sc003(x):
+    return (
+        bool(re.search(r"cyclonedx|spdx|syft", x.pipeline_code)),
+        "SBOM generation in pipeline",
+    )
+
+
 def c_sc007(x):
     """Each Concourse task image_resource is pinned (version tag or digest comment).
     Resources (push targets) and anchors resolved separately."""
@@ -340,64 +528,131 @@ def c_sc007(x):
             if m:
                 indent = len(m.group(1))
                 ref = (m.group(2) or "").strip()
-                block = lines[max(0, i - 2):i]
+                block = lines[max(0, i - 2) : i]
                 k = i + 1
-                while k < len(lines) and (not lines[k].strip() or (len(lines[k]) - len(lines[k].lstrip())) > indent):
+                while k < len(lines) and (
+                    not lines[k].strip()
+                    or (len(lines[k]) - len(lines[k].lstrip())) > indent
+                ):
                     block.append(lines[k])
                     k += 1
                 btext = "\n".join(block)
                 if ref.startswith("*"):
                     btext += "\n" + anchors.get(ref[1:], "")
                 if not _block_pinned(btext):
-                    return (False, f"{fname}: unpinned image_resource near line {i+1}")
+                    return (
+                        False,
+                        f"{fname}: unpinned image_resource near line {i + 1}",
+                    )
                 i = k
                 continue
             i += 1
     return (True, "all task image_resources pinned")
-def c_sc008(x): return ("sha256sum -c" in x.gitlabci, "fly download checksum-verified")
+
+
+def c_sc008(x):
+    return ("sha256sum -c" in x.gitlabci, "fly download checksum-verified")
+
+
 def c_sc009(x):
     has_update = "update-packages" in x.pipeline
-    via_mr = x.exists("renovate.json") or any("merge_request" in t for t in x.ci_text.values())
+    via_mr = x.exists("renovate.json") or any(
+        "merge_request" in t for t in x.ci_text.values()
+    )
     return ((not has_update) or via_mr, "dependency updates via MR / Renovate")
-def c_sc010(x): return ("Secret-Detection.gitlab-ci.yml" in x.gitlabci, "GitLab secret detection enabled")
-def c_sc011(x): return (bool(re.search(r"phpunit|functional|smoke", x.pipeline_code)), "test gate present")
-def c_sc012(x): return (x.exists("composer.lock"), "composer.lock committed")
+
+
+def c_sc010(x):
+    return (
+        "Secret-Detection.gitlab-ci.yml" in x.gitlabci,
+        "GitLab secret detection enabled",
+    )
+
+
+def c_sc011(x):
+    return (
+        bool(re.search(r"phpunit|functional|smoke", x.pipeline_code)),
+        "test gate present",
+    )
+
+
+def c_sc012(x):
+    return (x.exists("composer.lock"), "composer.lock committed")
+
+
 def c_sc013(x):
     text = x._text("compose.yaml") + "\n" + x.override_text
-    bad = re.search(r"image:\s*redis\s*$", text, re.M) or re.search(r"image:\s*\S+:latest\s*$", text, re.M)
+    bad = re.search(r"image:\s*redis\s*$", text, re.M) or re.search(
+        r"image:\s*\S+:latest\s*$", text, re.M
+    )
     return (not bad, "runtime images pinned (no bare redis / :latest)")
 
-def c_deploy002(x): return (not x.exists("ansible"), "no colocated ansible/")
+
+def c_deploy002(x):
+    return (not x.exists("ansible"), "no colocated ansible/")
+
+
 def _cache_cmd(x):
     _, svc = x.cache_service()
     cmd = (svc or {}).get("command", [])
     return " ".join(cmd) if isinstance(cmd, list) else str(cmd)
-def c_dro004(x): return ("--requirepass" in _cache_cmd(x), "cache requires auth")
+
+
+def c_dro004(x):
+    return ("--requirepass" in _cache_cmd(x), "cache requires auth")
+
+
 def c_dro005(x):
     cmd = _cache_cmd(x)
-    return ("--save" in cmd and "--appendonly yes" not in cmd, "cache persistence disabled")
+    return (
+        "--save" in cmd and "--appendonly yes" not in cmd,
+        "cache persistence disabled",
+    )
+
+
 def c_dro006(x):
     cmd = _cache_cmd(x)
     return ("--maxmemory" in cmd and "allkeys-lru" in cmd, "cache eviction bounded")
-def c_dro008(x): return c_ciimg002(x)
+
+
+def c_dro008(x):
+    return c_ciimg002(x)
+
+
 def c_dro009(x):
     bad = [n for n in x.persistent_services() if not pinned(x.service_image(n))]
     return (not bad, "persistent images pinned" if not bad else f"unpinned: {bad}")
+
+
 def c_dro010(x):
     froms = re.findall(r"^FROM\s+(\S+)", x.dockerfile, re.M)
     if not froms:
         return (False, "no FROM line")
     last = froms[-1]
     return (pinned(last) and ":edge" not in last, f"final FROM pinned ({last})")
+
+
 def c_dro012(x):
     s = x.settings
-    bad = re.search(r"'displayErrors'\s*=>\s*1", s) or re.search(r"'debug'\s*=>\s*true", s) or re.search(r"'trustedHostsPattern'\s*=>\s*'\.\*'", s)
+    bad = (
+        re.search(r"'displayErrors'\s*=>\s*1", s)
+        or re.search(r"'debug'\s*=>\s*true", s)
+        or re.search(r"'trustedHostsPattern'\s*=>\s*'\.\*'", s)
+    )
     prod_ok, detail = additional_prod_safe(x.additional)
     return (not bad and prod_ok, "no dev-mode flags; " + detail)
+
+
 def c_dro014(x):
     sched = "scheduler:run" in x._text("compose.yaml")
-    cron = bool(re.search(r"(entrypoint|command)[^\n]*\b(crond|dcron)\b", x._text("compose.yaml")))
+    cron = bool(
+        re.search(
+            r"(entrypoint|command)[^\n]*\b(crond|dcron)\b", x._text("compose.yaml")
+        )
+    )
     return (sched and not cron, "ofelia scheduler, no in-image dcron")
+
+
 def c_dro016(x):
     s = x.settings
     if "FileWriter" not in s:
@@ -410,14 +665,33 @@ def c_dro016(x):
             return (False, "FileWriter not pointed at php:// stream")
     return (True, "logs routed to php://stderr")
 
+
 def c_dep001(x):
     c = x.composer
-    return (bool(c.get("require", {}).get("php")) and bool((c.get("config", {}).get("platform", {}) or {}).get("php")), "php require + platform set")
+    return (
+        bool(c.get("require", {}).get("php"))
+        and bool((c.get("config", {}).get("platform", {}) or {}).get("php")),
+        "php require + platform set",
+    )
+
+
 def c_dep002(x):
-    req = json.dumps(x.composer.get("require", {})) + json.dumps(x.composer.get("require-dev", {}))
+    req = json.dumps(x.composer.get("require", {})) + json.dumps(
+        x.composer.get("require-dev", {})
+    )
     return (not re.search(r'"dev-[a-z0-9_\-]+"', req), "no dev-branch constraints")
-def c_dep003(x): return (x.composer.get("minimum-stability", "stable") == "stable", "minimum-stability stable")
-def c_dep004(x): return (x.exists("composer.lock"), "composer.lock present")
+
+
+def c_dep003(x):
+    return (
+        x.composer.get("minimum-stability", "stable") == "stable",
+        "minimum-stability stable",
+    )
+
+
+def c_dep004(x):
+    return (x.exists("composer.lock"), "composer.lock present")
+
 
 def c_dro007(x):
     ofelia = x.services.get("ofelia", {}) or {}
@@ -426,39 +700,99 @@ def c_dro007(x):
     env = ofelia.get("environment", []) or []
     env_text = " ".join(env) if isinstance(env, list) else json.dumps(env)
     via_proxy = "socket-proxy" in env_text and "tcp://" in env_text
-    proxy = any("docker-socket-proxy" in x.resolve_image((s or {}).get("image", "")) for s in x.services.values())
+    proxy = any(
+        "docker-socket-proxy" in x.resolve_image((s or {}).get("image", ""))
+        for s in x.services.values()
+    )
     return (no_sock and via_proxy and proxy, "ofelia via socket-proxy, no direct sock")
+
+
 def c_dro011(x):
     # Strong check: a git-tracked .env (gitignored yet force-added) with live
     # secrets is the exact attack (CONF-02). Fall back to the .gitignore-text
     # heuristic only when git is unavailable.
     if x.git_tracked(".env") is True:
         return (False, ".env is git-tracked (committed-secret risk)")
-    base = settings_secret_free(x.settings) and ".env" in x.gitignore and x.exists(".env.dist")
-    note = " [git unavailable: .gitignore-text fallback]" if x.git_tracked(".env") is None else ""
+    base = (
+        settings_secret_free(x.settings)
+        and ".env" in x.gitignore
+        and x.exists(".env.dist")
+    )
+    note = (
+        " [git unavailable: .gitignore-text fallback]"
+        if x.git_tracked(".env") is None
+        else ""
+    )
     return (base, "no committed creds; .env ignored; .env.dist schema" + note)
-def c_sc004(x): return ("cosign" in x.pipeline_code, "cosign signing in pipeline")
-def c_sc005(x): return c_ci002(x)
-def c_sc006(x): return c_struct002(x)
+
+
+def c_sc004(x):
+    return ("cosign" in x.pipeline_code, "cosign signing in pipeline")
+
+
+def c_sc005(x):
+    return c_ci002(x)
+
+
+def c_sc006(x):
+    return c_struct002(x)
+
+
 def c_sec001(x):
     text = x._text("compose.yaml")
-    return (not re.search(r"image:\s*redis\s*$", text, re.M) and not re.search(r"image:\s*redis:latest", text), "no bare/latest redis image")
-def c_sec002(x): return (not re.search(r"'installToolPassword'\s*=>\s*'\$argon", x.settings), "no hardcoded installToolPassword")
-def c_sec003(x): return ("TYPO3_ENCRYPTION_KEY" in x.additional, "encryptionKey env-driven")
-def c_sec004(x): return c_struct006(x)
+    return (
+        not re.search(r"image:\s*redis\s*$", text, re.M)
+        and not re.search(r"image:\s*redis:latest", text),
+        "no bare/latest redis image",
+    )
+
+
+def c_sec002(x):
+    return (
+        not re.search(r"'installToolPassword'\s*=>\s*'\$argon", x.settings),
+        "no hardcoded installToolPassword",
+    )
+
+
+def c_sec003(x):
+    return ("TYPO3_ENCRYPTION_KEY" in x.additional, "encryptionKey env-driven")
+
+
+def c_sec004(x):
+    return c_struct006(x)
+
+
 def c_sec005(x):
     s_ok = not re.search(r"'devIPmask'\s*=>\s*'\*'", x.settings)
     prod_ok, _ = additional_prod_safe(x.additional)
     return (s_ok and prod_ok, "devIPmask not wildcard (settings + additional)")
-def c_sec006(x): return (not re.search(r"'trustedHostsPattern'\s*=>\s*'\.\*'", x.settings), "trustedHostsPattern not wildcard")
 
-def c_doc001(x): return (x.exists("AGENTS.md"), "AGENTS.md present")
+
+def c_sec006(x):
+    return (
+        not re.search(r"'trustedHostsPattern'\s*=>\s*'\.\*'", x.settings),
+        "trustedHostsPattern not wildcard",
+    )
+
+
+def c_doc001(x):
+    return (x.exists("AGENTS.md"), "AGENTS.md present")
+
+
 def c_doc002(x):
     p = x.root / "CLAUDE.md"
-    return (p.is_symlink() and os.readlink(p) == "AGENTS.md", "CLAUDE.md -> AGENTS.md symlink")
+    return (
+        p.is_symlink() and os.readlink(p) == "AGENTS.md",
+        "CLAUDE.md -> AGENTS.md symlink",
+    )
+
+
 def c_doc003(x):
     r = x._text("README.md")
-    return ("make install" in r and ("COMPOSER_AUTH" in r or ".env" in r), "README documents setup/env/make")
+    return (
+        "make install" in r and ("COMPOSER_AUTH" in r or ".env" in r),
+        "README documents setup/env/make",
+    )
 
 
 def _anchor_blocks(lines: list[str]) -> dict[str, str]:
@@ -468,7 +802,10 @@ def _anchor_blocks(lines: list[str]) -> dict[str, str]:
         if m:
             indent = len(lines[i]) - len(lines[i].lstrip())
             block, k = [lines[i]], i + 1
-            while k < len(lines) and (not lines[k].strip() or (len(lines[k]) - len(lines[k].lstrip())) > indent):
+            while k < len(lines) and (
+                not lines[k].strip()
+                or (len(lines[k]) - len(lines[k].lstrip())) > indent
+            ):
                 block.append(lines[k])
                 k += 1
             out[m.group(2)] = "\n".join(block)
@@ -490,29 +827,75 @@ def _block_pinned(btext: str) -> bool:
 
 
 CHECKS = {
-    "STRUCT-001": c_struct001, "STRUCT-002": c_struct002, "STRUCT-003": c_struct003,
-    "STRUCT-004": c_struct004, "STRUCT-005": c_struct005, "STRUCT-006": c_struct006,
-    "STRUCT-007": c_struct007, "STRUCT-008": c_struct008,
-    "CI-IMG-001": c_ciimg001, "CI-IMG-002": c_ciimg002, "CI-IMG-003": c_ciimg003,
-    "CI-IMG-004": c_ciimg004, "CI-IMG-005": c_ciimg005, "CI-IMG-006": c_ciimg006,
-    "CI-IMG-007": c_ciimg007, "CI-IMG-008": c_ciimg008, "CI-IMG-009": c_ciimg009,
-    "CI-IMG-010": c_ciimg010, "CI-IMG-011": c_ciimg011, "CI-IMG-012": c_ciimg012,
-    "CI-IMG-013": c_ciimg013, "CI-IMG-014": c_ciimg014, "CI-IMG-015": c_ciimg015,
-    "DRO-001": c_dro001, "DRO-002": c_dro002, "DRO-003": c_dro003, "DRO-015": c_dro015,
+    "STRUCT-001": c_struct001,
+    "STRUCT-002": c_struct002,
+    "STRUCT-003": c_struct003,
+    "STRUCT-004": c_struct004,
+    "STRUCT-005": c_struct005,
+    "STRUCT-006": c_struct006,
+    "STRUCT-007": c_struct007,
+    "STRUCT-008": c_struct008,
+    "CI-IMG-001": c_ciimg001,
+    "CI-IMG-002": c_ciimg002,
+    "CI-IMG-003": c_ciimg003,
+    "CI-IMG-004": c_ciimg004,
+    "CI-IMG-005": c_ciimg005,
+    "CI-IMG-006": c_ciimg006,
+    "CI-IMG-007": c_ciimg007,
+    "CI-IMG-008": c_ciimg008,
+    "CI-IMG-009": c_ciimg009,
+    "CI-IMG-010": c_ciimg010,
+    "CI-IMG-011": c_ciimg011,
+    "CI-IMG-012": c_ciimg012,
+    "CI-IMG-013": c_ciimg013,
+    "CI-IMG-014": c_ciimg014,
+    "CI-IMG-015": c_ciimg015,
+    "DRO-001": c_dro001,
+    "DRO-002": c_dro002,
+    "DRO-003": c_dro003,
+    "DRO-015": c_dro015,
     "DRO-020": c_dro020,
-    "CI-001": c_ci001, "CI-002": c_ci002, "DRO-013": c_dro013,
-    "SC-001": c_sc001, "SC-002": c_sc002, "SC-003": c_sc003, "SC-007": c_sc007,
-    "SC-008": c_sc008, "SC-009": c_sc009, "SC-010": c_sc010, "SC-011": c_sc011,
-    "SC-012": c_sc012, "SC-013": c_sc013,
+    "CI-001": c_ci001,
+    "CI-002": c_ci002,
+    "DRO-013": c_dro013,
+    "SC-001": c_sc001,
+    "SC-002": c_sc002,
+    "SC-003": c_sc003,
+    "SC-007": c_sc007,
+    "SC-008": c_sc008,
+    "SC-009": c_sc009,
+    "SC-010": c_sc010,
+    "SC-011": c_sc011,
+    "SC-012": c_sc012,
+    "SC-013": c_sc013,
     "DEPLOY-002": c_deploy002,
-    "DRO-004": c_dro004, "DRO-005": c_dro005, "DRO-006": c_dro006, "DRO-008": c_dro008,
-    "DRO-009": c_dro009, "DRO-010": c_dro010, "DRO-012": c_dro012, "DRO-014": c_dro014,
+    "DRO-004": c_dro004,
+    "DRO-005": c_dro005,
+    "DRO-006": c_dro006,
+    "DRO-008": c_dro008,
+    "DRO-009": c_dro009,
+    "DRO-010": c_dro010,
+    "DRO-012": c_dro012,
+    "DRO-014": c_dro014,
     "DRO-016": c_dro016,
-    "DEP-001": c_dep001, "DEP-002": c_dep002, "DEP-003": c_dep003, "DEP-004": c_dep004,
-    "DRO-007": c_dro007, "DRO-011": c_dro011, "SC-004": c_sc004, "SC-005": c_sc005,
-    "SC-006": c_sc006, "SEC-001": c_sec001, "SEC-002": c_sec002, "SEC-003": c_sec003,
-    "SEC-004": c_sec004, "SEC-005": c_sec005, "SEC-006": c_sec006,
-    "DOC-001": c_doc001, "DOC-002": c_doc002, "DOC-003": c_doc003,
+    "DEP-001": c_dep001,
+    "DEP-002": c_dep002,
+    "DEP-003": c_dep003,
+    "DEP-004": c_dep004,
+    "DRO-007": c_dro007,
+    "DRO-011": c_dro011,
+    "SC-004": c_sc004,
+    "SC-005": c_sc005,
+    "SC-006": c_sc006,
+    "SEC-001": c_sec001,
+    "SEC-002": c_sec002,
+    "SEC-003": c_sec003,
+    "SEC-004": c_sec004,
+    "SEC-005": c_sec005,
+    "SEC-006": c_sec006,
+    "DOC-001": c_doc001,
+    "DOC-002": c_doc002,
+    "DOC-003": c_doc003,
 }
 
 ADVISORY_NOTE = {
@@ -527,14 +910,21 @@ GREEN, RED, YEL, DIM, RST = "\033[32m", "\033[31m", "\033[33m", "\033[2m", "\033
 
 def main() -> int:
     root = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else ".").resolve()
-    rules = json.loads((pathlib.Path(__file__).with_name("rules.json")).read_text())["rules"]
+    rules = json.loads((pathlib.Path(__file__).with_name("rules.json")).read_text())[
+        "rules"
+    ]
     ctx = Ctx(root)
 
     max_possible = penalty = 0
     failures = []
     rows = []
     for rule in rules:
-        code, sev, scope, weight = rule["code"], rule["severity"], rule["scope"], rule["weight"]
+        code, sev, scope, weight = (
+            rule["code"],
+            rule["severity"],
+            rule["scope"],
+            rule["weight"],
+        )
         if scope == "advisory":
             rows.append((code, sev, "ADVISORY", ADVISORY_NOTE.get(code, "")))
             continue
@@ -559,8 +949,10 @@ def main() -> int:
         print(f"  {color}{status:<8}{RST} {code:<11} {DIM}{sev:<7}{RST} {detail}")
 
     band = GREEN if score >= 90 else (YEL if score >= 70 else RED)
-    print(f"\n  repo-scope score: {band}{score}%{RST}  "
-          f"({(max_possible - penalty)}/{max_possible} pts, {len(failures)} failing)")
+    print(
+        f"\n  repo-scope score: {band}{score}%{RST}  "
+        f"({(max_possible - penalty)}/{max_possible} pts, {len(failures)} failing)"
+    )
     if failures:
         print(f"  {RED}FAILING:{RST} {', '.join(failures)}")
     print()
