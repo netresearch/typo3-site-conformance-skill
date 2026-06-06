@@ -1,7 +1,7 @@
 {
   "name": "typo3-site-conformance",
-  "version": "0.1.0",
-  "description": "Conformance and hardening for deployable TYPO3 v14 site/project repos (type:project + Docker/Compose): layout, containers, Concourse CI, supply-chain, secrets, Valkey/ofelia. The site/project counterpart to typo3-conformance.",
+  "version": "0.2.0",
+  "description": "Source-of-truth conformance ruleset + self-contained checker for deployable TYPO3 v14 site/project repos (type:project + Docker/Compose): layout, containers, Concourse CI, supply-chain, secrets, Valkey/ofelia. The site/project counterpart to typo3-conformance.",
   "author": {
     "name": "Netresearch DTT GmbH",
     "url": "https://www.netresearch.de"
