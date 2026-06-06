@@ -343,13 +343,15 @@ def c_sc007(x):
                 block = lines[max(0, i - 2):i]
                 k = i + 1
                 while k < len(lines) and (not lines[k].strip() or (len(lines[k]) - len(lines[k].lstrip())) > indent):
-                    block.append(lines[k]); k += 1
+                    block.append(lines[k])
+                    k += 1
                 btext = "\n".join(block)
                 if ref.startswith("*"):
                     btext += "\n" + anchors.get(ref[1:], "")
                 if not _block_pinned(btext):
                     return (False, f"{fname}: unpinned image_resource near line {i+1}")
-                i = k; continue
+                i = k
+                continue
             i += 1
     return (True, "all task image_resources pinned")
 def c_sc008(x): return ("sha256sum -c" in x.gitlabci, "fly download checksum-verified")
@@ -467,9 +469,11 @@ def _anchor_blocks(lines: list[str]) -> dict[str, str]:
             indent = len(lines[i]) - len(lines[i].lstrip())
             block, k = [lines[i]], i + 1
             while k < len(lines) and (not lines[k].strip() or (len(lines[k]) - len(lines[k].lstrip())) > indent):
-                block.append(lines[k]); k += 1
+                block.append(lines[k])
+                k += 1
             out[m.group(2)] = "\n".join(block)
-            i = k; continue
+            i = k
+            continue
         i += 1
     return out
 
