@@ -31,6 +31,19 @@ class _Loader(yaml.SafeLoader):
 _Loader.add_multi_constructor("!", lambda loader, suffix, node: None)
 
 
+def _expand_placeholders(text: str, lookup) -> str:
+    """Expand ${VAR} / ${VAR:-default} with POSIX ``:-`` semantics — the default
+    applies when the variable is unset OR empty, not only when it is missing."""
+
+    def _sub(m):
+        val = lookup(m.group(1), "")
+        if not val and m.group(2) is not None:
+            return m.group(2)
+        return val
+
+    return re.sub(r"\$\{(\w+)(?::-([^}]*))?\}", _sub, text)
+
+
 # --------------------------------------------------------------------------- #
 # Context: load every artefact once.
 # --------------------------------------------------------------------------- #
@@ -94,11 +107,7 @@ class Ctx:
                 continue
             key, _, val = line.partition("=")
             key, val = key.strip(), val.strip()
-            val = re.sub(
-                r"\$\{(\w+)(?::-([^}]*))?\}",
-                lambda m: env.get(m.group(1), m.group(2) or ""),
-                val,
-            )
+            val = _expand_placeholders(val, env.get)
             env[key] = val
         return env
 
@@ -136,11 +145,7 @@ class Ctx:
     def resolve_image(self, img: str) -> str:
         if not img:
             return ""
-        return re.sub(
-            r"\$\{(\w+)(?::-([^}]*))?\}",
-            lambda m: self.envdist.get(m.group(1), m.group(2) or ""),
-            img,
-        )
+        return _expand_placeholders(img, self.envdist.get)
 
     def service_image(self, name: str) -> str:
         svc = self.services.get(name, {}) or {}
@@ -415,9 +420,10 @@ def c_ciimg014(x):
         or "=:82" in text
         or 'tag: "82"' in text
         # Standard PHP image tags use the dotted form (e.g. php:8.2-fpm-alpine),
-        # not just the NR registry's bare :82 convention.
-        or ":8.2" in text
-        or "8.2-" in text
+        # not just the NR registry's bare :82 convention. Anchor to a tag
+        # boundary and forbid a preceding digit so unrelated versions such as
+        # node:18.2-alpine do not false-positive on the "8.2" substring.
+        or bool(re.search(r"(?<!\d)8\.2(?=[-.\s\"']|$)", text))
     )
     return (not has_82, "no PHP 8.2 runtime")
 
@@ -677,7 +683,11 @@ def c_dro016(x):
     if "FileWriter" not in s:
         return (True, "no FileWriter")
     # Every FileWriter must log to a php:// stream, never a disk path.
-    for m in re.finditer(r"FileWriter(?:::class)?['\"]?\s*=>\s*\[(.*?)\]", s, re.S):
+    # Anchor to the TYPO3 FileWriter class — a preceding letter means it is a
+    # different class (e.g. MyCustomFileWriter), which we must not match.
+    for m in re.finditer(
+        r"(?<![A-Za-z])FileWriter(?:::class)?['\"]?\s*=>\s*\[(.*?)\]", s, re.S
+    ):
         block = m.group(1)
         lf = re.search(r"""['"]logFile['"]\s*=>\s*['"]([^'"]+)['"]""", block)
         if not lf or not lf.group(1).startswith("php://"):
