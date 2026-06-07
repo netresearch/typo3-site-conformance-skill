@@ -1,8 +1,7 @@
 # Conformance checker
 
 `check.py` scores a TYPO3 site/project repository against the **gold-standard
-conformance ruleset** (`rules.json`) — the deduped 73-rule catalogue that is
-**canonical in this skill** (the `typo3-site-conformance` source of truth).
+conformance ruleset** — the deduped 73-rule catalogue in `rules.json`.
 
 ```bash
 python3 check.py /path/to/target-repo     # only pyyaml is required
@@ -95,10 +94,9 @@ not a security boundary.
 ## Regenerating the ruleset
 
 `rules.json` is produced by `gen_rules.py`, which **embeds** the 73-rule
-catalogue inline. This skill is the **source of truth**: edit the catalogue in
-`gen_rules.py`, regenerate `rules.json`, and the downstream reference
-implementation (`typo3-14-gold`) and the human-readable companion
-(`typo3-project-standard`, Netresearch-internal) follow.
+catalogue inline. Edit the catalogue in `gen_rules.py` and regenerate
+`rules.json`. (`typo3-14-gold` and `typo3-project-standard` track the same
+ruleset.)
 
 ```bash
 python3 gen_rules.py
