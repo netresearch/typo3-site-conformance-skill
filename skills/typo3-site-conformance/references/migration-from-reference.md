@@ -17,8 +17,9 @@ gold-conformant one. The runnable reference end state is `typo3-14-gold`
    SMTP). `.env` is git-ignored; `.env.dist` is the schema (`SEC-*`, `STRUCT-002/003`).
 3. **Rename + pin Compose.** `docker-compose.yml` → `compose.yaml`; dev overlay →
    `compose.override.yaml` (drop `COMPOSE_FILE=a:b:c`). Pin every image to an
-   immutable reference — third-party images by `@sha256` digest, first-party
-   Netresearch-registry images by an explicit version tag; never `:latest`. Add
+   immutable reference — third-party images by `@sha256` digest (or a non-floating
+   tag); first-party `registry.netresearch.de` images may track a floating tag
+   (they are internal and trusted). Add
    `healthcheck`, `deploy.resources.limits`, `restart` to persistent
    services (`CI-IMG-*`, `DRO-001/003`).
 4. **Redis → Valkey.** Swap the cache image to `valkey/valkey`, add

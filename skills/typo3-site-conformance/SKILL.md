@@ -43,7 +43,7 @@ Netresearch-internal and optional. Propose rule changes in `gen_rules.py`.
 | Family | Intent |
 |--------|--------|
 | `STRUCT` | TYPO3-native layout: `config/` at composer-project root, no `build/config`, `config/sites/*/config.yaml`, committed `composer.lock`, `.gitignore` excludes vendor/var/public + live-env files |
-| `CONTAINER` | `compose.yaml` (not `docker-compose.yml`); images pinned (third-party by `@sha256` digest, first-party Netresearch-registry images by explicit version tag); no `:latest`/`alpine:edge`; healthchecks + `deploy.resources.limits` + `restart` on persistent services; no direct `docker.sock` mount |
+| `CONTAINER` | `compose.yaml` (not `docker-compose.yml`); images pinned — third-party by `@sha256` digest or a non-floating tag (no `:latest`/`:edge`), first-party `registry.netresearch.de` images may track a floating tag (internal, trusted); healthchecks + `deploy.resources.limits` + `restart` on persistent services; no direct `docker.sock` mount |
 | `CI` | composer audit → Trivy gate → SBOM → cosign; CI task images pinned; fly download checksum-verified; secret detection; test gate; updates via MR |
 | `DEPLOY` | Valkey (auth + eviction + no persistence); ofelia scheduler via socket-proxy; weekly restore-verification; logs to stdout/stderr |
 | `DEP` | declared PHP platform constraint; no dev-branch constraints; `minimum-stability: stable`; committed lock |
