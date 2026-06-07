@@ -162,6 +162,14 @@ class Ctx:
         return None, None
 
 
+def _is_first_party(image: str) -> bool:
+    """True iff the image's registry HOST is exactly registry.netresearch.de. A
+    substring test is bypassable (evil.com/registry.netresearch.de/x, or
+    registry.netresearch.de.attacker.com/x), so compare the registry component —
+    everything before the first '/'."""
+    return image.strip().split("/", 1)[0] == "registry.netresearch.de"
+
+
 def pinned(image: str) -> bool:
     """An image is acceptably pinned if it carries a digest, an explicit
     non-floating tag, or is a first-party Netresearch-registry image. First-party
@@ -170,7 +178,7 @@ def pinned(image: str) -> bool:
     a digest or a non-floating version tag."""
     if "@sha256:" in image:
         return True
-    if "registry.netresearch.de/" in image:
+    if _is_first_party(image):
         return True
     ref = image.split("@")[0]
     name = ref.rsplit("/", 1)[-1]
@@ -612,13 +620,15 @@ def c_sc012(x):
 
 
 def c_sc013(x):
-    text = x._text("compose.yaml") + "\n" + x.override_text
+    # Strip inline comments first so `image: redis # note` cannot slip past the
+    # end-anchored regexes.
+    text = _strip_yaml_comments(x._text("compose.yaml") + "\n" + x.override_text)
     if re.search(r"image:\s*redis\s*$", text, re.M):
         return (False, "runtime images pinned (bare redis)")
     # :latest is acceptable only on a first-party Netresearch-registry image;
     # any third-party :latest is a floating, non-reproducible pin.
     for m in re.finditer(r"image:\s*(\S+:latest)\s*$", text, re.M):
-        if "registry.netresearch.de/" not in m.group(1):
+        if not _is_first_party(m.group(1)):
             return (False, f"third-party :latest image ({m.group(1)})")
     return (True, "runtime images pinned (first-party :latest allowed)")
 
