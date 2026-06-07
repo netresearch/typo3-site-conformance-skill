@@ -40,12 +40,17 @@ JOB_SERVICES = {"app", "setup", "backup"}  # one-shot / idle runners (exempt)
 class Ctx:
     def __init__(self, root: pathlib.Path) -> None:
         self.root = root
+        # The Composer project may live at the repo root OR under an `app/`
+        # wrapper (the Netresearch de-facto layout: infra at root, project in
+        # app/). Detect it once; project-scoped reads use self.proj, while
+        # infra (compose / ci / Dockerfile / .gitlab-ci) stays at the repo root.
+        self.proj = root / "app" if (root / "app" / "composer.json").is_file() else root
         self.compose = self._yaml("compose.yaml") or {}
         self.override_text = self._text("compose.override.yaml")
         self.override = self._yaml("compose.override.yaml", _Loader) or {}
-        self.composer = self._json("composer.json") or {}
-        self.settings = self._text("config/system/settings.php")
-        self.additional = self._text("config/system/additional.php")
+        self.composer = self._json("composer.json", base="proj") or {}
+        self.settings = self._text("config/system/settings.php", base="proj")
+        self.additional = self._text("config/system/additional.php", base="proj")
         self.dockerfile = self._text("Dockerfile")
         self.gitlabci = self._text(".gitlab-ci.yml")
         self.pipeline = self._text("ci/pipeline.yml")
@@ -56,8 +61,11 @@ class Ctx:
         self.services = self.compose.get("services", {}) or {}
 
     # ---- loaders ----
-    def _text(self, rel: str) -> str:
-        p = self.root / rel
+    def _base(self, base: str) -> pathlib.Path:
+        return self.proj if base == "proj" else self.root
+
+    def _text(self, rel: str, base: str = "root") -> str:
+        p = self._base(base) / rel
         return p.read_text(encoding="utf-8") if p.is_file() else ""
 
     def _yaml(self, rel: str, loader=yaml.SafeLoader):
@@ -69,8 +77,8 @@ class Ctx:
         except yaml.YAMLError:
             return None
 
-    def _json(self, rel: str):
-        p = self.root / rel
+    def _json(self, rel: str, base: str = "root"):
+        p = self._base(base) / rel
         if not p.is_file():
             return None
         try:
@@ -105,6 +113,10 @@ class Ctx:
     # ---- helpers ----
     def exists(self, rel: str) -> bool:
         return (self.root / rel).exists()
+
+    def proj_exists(self, rel: str) -> bool:
+        """Existence check relative to the Composer project root (app/ or repo root)."""
+        return (self.proj / rel).exists()
 
     def git_tracked(self, rel: str):
         """True/False whether `rel` is tracked in git; None if git is unavailable
@@ -213,9 +225,9 @@ def additional_prod_safe(text: str) -> tuple[bool, str]:
 # --------------------------------------------------------------------------- #
 def c_struct001(x):
     return (
-        not x.exists("build/config/system/settings.php")
-        and x.exists("config/system/settings.php"),
-        "config/ at root, no build/config",
+        not x.proj_exists("build/config/system/settings.php")
+        and x.proj_exists("config/system/settings.php"),
+        "config/ at composer-project root, no build/config",
     )
 
 
@@ -225,21 +237,21 @@ def c_struct002(x):
 
 def c_struct003(x):
     return (
-        x.exists("config/system/additional.php") and "$_SERVER" in x.additional,
+        x.proj_exists("config/system/additional.php") and "$_SERVER" in x.additional,
         "additional.php sources $_SERVER",
     )
 
 
 def c_struct004(x):
     return (
-        x.composer.get("type") == "project" and x.exists("composer.lock"),
+        x.composer.get("type") == "project" and x.proj_exists("composer.lock"),
         "type:project + committed composer.lock",
     )
 
 
 def c_struct005(x):
     return (
-        len(list((x.root / "config/sites").glob("*/config.yaml"))) > 0,
+        len(list((x.proj / "config/sites").glob("*/config.yaml"))) > 0,
         "config/sites/*/config.yaml present",
     )
 
@@ -256,7 +268,7 @@ def c_struct007(x):
 
 
 def c_struct008(x):
-    return (not x.exists("build/config"), "no legacy build/config")
+    return (not x.proj_exists("build/config"), "no legacy build/config")
 
 
 def _live_env_files(x):
@@ -584,7 +596,7 @@ def c_sc011(x):
 
 
 def c_sc012(x):
-    return (x.exists("composer.lock"), "composer.lock committed")
+    return (x.proj_exists("composer.lock"), "composer.lock committed")
 
 
 def c_sc013(x):
@@ -697,7 +709,7 @@ def c_dep003(x):
 
 
 def c_dep004(x):
-    return (x.exists("composer.lock"), "composer.lock present")
+    return (x.proj_exists("composer.lock"), "composer.lock present")
 
 
 def c_dro007(x):
