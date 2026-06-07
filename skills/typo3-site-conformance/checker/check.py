@@ -31,6 +31,19 @@ class _Loader(yaml.SafeLoader):
 _Loader.add_multi_constructor("!", lambda loader, suffix, node: None)
 
 
+def _expand_placeholders(text: str, lookup) -> str:
+    """Expand ${VAR} / ${VAR:-default} with POSIX ``:-`` semantics — the default
+    applies when the variable is unset OR empty, not only when it is missing."""
+
+    def _sub(m):
+        val = lookup(m.group(1), "")
+        if not val and m.group(2) is not None:
+            return m.group(2)
+        return val
+
+    return re.sub(r"\$\{(\w+)(?::-([^}]*))?\}", _sub, text)
+
+
 # --------------------------------------------------------------------------- #
 # Context: load every artefact once.
 # --------------------------------------------------------------------------- #
@@ -40,12 +53,17 @@ JOB_SERVICES = {"app", "setup", "backup"}  # one-shot / idle runners (exempt)
 class Ctx:
     def __init__(self, root: pathlib.Path) -> None:
         self.root = root
+        # The Composer project may live at the repo root OR under an `app/`
+        # wrapper (the Netresearch de-facto layout: infra at root, project in
+        # app/). Detect it once; project-scoped reads use self.proj, while
+        # infra (compose / ci / Dockerfile / .gitlab-ci) stays at the repo root.
+        self.proj = root / "app" if (root / "app" / "composer.json").is_file() else root
         self.compose = self._yaml("compose.yaml") or {}
         self.override_text = self._text("compose.override.yaml")
         self.override = self._yaml("compose.override.yaml", _Loader) or {}
-        self.composer = self._json("composer.json") or {}
-        self.settings = self._text("config/system/settings.php")
-        self.additional = self._text("config/system/additional.php")
+        self.composer = self._json("composer.json", base="proj") or {}
+        self.settings = self._text("config/system/settings.php", base="proj")
+        self.additional = self._text("config/system/additional.php", base="proj")
         self.dockerfile = self._text("Dockerfile")
         self.gitlabci = self._text(".gitlab-ci.yml")
         self.pipeline = self._text("ci/pipeline.yml")
@@ -56,8 +74,11 @@ class Ctx:
         self.services = self.compose.get("services", {}) or {}
 
     # ---- loaders ----
-    def _text(self, rel: str) -> str:
-        p = self.root / rel
+    def _base(self, base: str) -> pathlib.Path:
+        return self.proj if base == "proj" else self.root
+
+    def _text(self, rel: str, base: str = "root") -> str:
+        p = self._base(base) / rel
         return p.read_text(encoding="utf-8") if p.is_file() else ""
 
     def _yaml(self, rel: str, loader=yaml.SafeLoader):
@@ -69,8 +90,8 @@ class Ctx:
         except yaml.YAMLError:
             return None
 
-    def _json(self, rel: str):
-        p = self.root / rel
+    def _json(self, rel: str, base: str = "root"):
+        p = self._base(base) / rel
         if not p.is_file():
             return None
         try:
@@ -86,9 +107,7 @@ class Ctx:
                 continue
             key, _, val = line.partition("=")
             key, val = key.strip(), val.strip()
-            val = re.sub(
-                r"\$\{(\w+)(?::-[^}]*)?\}", lambda m: env.get(m.group(1), ""), val
-            )
+            val = _expand_placeholders(val, env.get)
             env[key] = val
         return env
 
@@ -103,6 +122,10 @@ class Ctx:
     # ---- helpers ----
     def exists(self, rel: str) -> bool:
         return (self.root / rel).exists()
+
+    def proj_exists(self, rel: str) -> bool:
+        """Existence check relative to the Composer project root (app/ or repo root)."""
+        return (self.proj / rel).exists()
 
     def git_tracked(self, rel: str):
         """True/False whether `rel` is tracked in git; None if git is unavailable
@@ -122,11 +145,7 @@ class Ctx:
     def resolve_image(self, img: str) -> str:
         if not img:
             return ""
-        return re.sub(
-            r"\$\{(\w+)(?::-([^}]*))?\}",
-            lambda m: self.envdist.get(m.group(1), m.group(2) or ""),
-            img,
-        )
+        return _expand_placeholders(img, self.envdist.get)
 
     def service_image(self, name: str) -> str:
         svc = self.services.get(name, {}) or {}
@@ -211,9 +230,9 @@ def additional_prod_safe(text: str) -> tuple[bool, str]:
 # --------------------------------------------------------------------------- #
 def c_struct001(x):
     return (
-        not x.exists("build/config/system/settings.php")
-        and x.exists("config/system/settings.php"),
-        "config/ at root, no build/config",
+        not x.proj_exists("build/config/system/settings.php")
+        and x.proj_exists("config/system/settings.php"),
+        "config/ at composer-project root, no build/config",
     )
 
 
@@ -223,21 +242,21 @@ def c_struct002(x):
 
 def c_struct003(x):
     return (
-        x.exists("config/system/additional.php") and "$_SERVER" in x.additional,
+        x.proj_exists("config/system/additional.php") and "$_SERVER" in x.additional,
         "additional.php sources $_SERVER",
     )
 
 
 def c_struct004(x):
     return (
-        x.composer.get("type") == "project" and x.exists("composer.lock"),
+        x.composer.get("type") == "project" and x.proj_exists("composer.lock"),
         "type:project + committed composer.lock",
     )
 
 
 def c_struct005(x):
     return (
-        len(list((x.root / "config/sites").glob("*/config.yaml"))) > 0,
+        len(list((x.proj / "config/sites").glob("*/config.yaml"))) > 0,
         "config/sites/*/config.yaml present",
     )
 
@@ -254,7 +273,7 @@ def c_struct007(x):
 
 
 def c_struct008(x):
-    return (not x.exists("build/config"), "no legacy build/config")
+    return (not x.proj_exists("build/config"), "no legacy build/config")
 
 
 def _live_env_files(x):
@@ -396,12 +415,17 @@ def c_ciimg013(x):
 
 def c_ciimg014(x):
     text = x._text(".env.dist") + x.pipeline
-    return (
-        ":82" not in re.sub(r"[0-9]:82\b", "", text)
-        and "=:82" not in text
-        and 'tag: "82"' not in text,
-        "no PHP 8.2 runtime",
+    has_82 = (
+        ":82" in re.sub(r"[0-9]:82\b", "", text)
+        or "=:82" in text
+        or 'tag: "82"' in text
+        # Standard PHP image tags use the dotted form (e.g. php:8.2-fpm-alpine),
+        # not just the NR registry's bare :82 convention. Anchor to a tag
+        # boundary and forbid a preceding digit so unrelated versions such as
+        # node:18.2-alpine do not false-positive on the "8.2" substring.
+        or bool(re.search(r"(?<!\d)8\.2(?=[-.\s\"']|$)", text))
     )
+    return (not has_82, "no PHP 8.2 runtime")
 
 
 def c_ciimg015(x):
@@ -532,6 +556,7 @@ def c_sc007(x):
                 k = i + 1
                 while k < len(lines) and (
                     not lines[k].strip()
+                    or lines[k].lstrip().startswith("#")
                     or (len(lines[k]) - len(lines[k].lstrip())) > indent
                 ):
                     block.append(lines[k])
@@ -577,7 +602,7 @@ def c_sc011(x):
 
 
 def c_sc012(x):
-    return (x.exists("composer.lock"), "composer.lock committed")
+    return (x.proj_exists("composer.lock"), "composer.lock committed")
 
 
 def c_sc013(x):
@@ -658,9 +683,13 @@ def c_dro016(x):
     if "FileWriter" not in s:
         return (True, "no FileWriter")
     # Every FileWriter must log to a php:// stream, never a disk path.
-    for m in re.finditer(r"FileWriter::class\s*=>\s*\[(.*?)\]", s, re.S):
+    # Anchor to the TYPO3 FileWriter class — a preceding letter means it is a
+    # different class (e.g. MyCustomFileWriter), which we must not match.
+    for m in re.finditer(
+        r"(?<![A-Za-z])FileWriter(?:::class)?['\"]?\s*=>\s*\[(.*?)\]", s, re.S
+    ):
         block = m.group(1)
-        lf = re.search(r"'logFile'\s*=>\s*'([^']+)'", block)
+        lf = re.search(r"""['"]logFile['"]\s*=>\s*['"]([^'"]+)['"]""", block)
         if not lf or not lf.group(1).startswith("php://"):
             return (False, "FileWriter not pointed at php:// stream")
     return (True, "logs routed to php://stderr")
@@ -690,7 +719,7 @@ def c_dep003(x):
 
 
 def c_dep004(x):
-    return (x.exists("composer.lock"), "composer.lock present")
+    return (x.proj_exists("composer.lock"), "composer.lock present")
 
 
 def c_dro007(x):
@@ -804,6 +833,7 @@ def _anchor_blocks(lines: list[str]) -> dict[str, str]:
             block, k = [lines[i]], i + 1
             while k < len(lines) and (
                 not lines[k].strip()
+                or lines[k].lstrip().startswith("#")
                 or (len(lines[k]) - len(lines[k].lstrip())) > indent
             ):
                 block.append(lines[k])
