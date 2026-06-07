@@ -87,7 +87,9 @@ class Ctx:
             key, _, val = line.partition("=")
             key, val = key.strip(), val.strip()
             val = re.sub(
-                r"\$\{(\w+)(?::-[^}]*)?\}", lambda m: env.get(m.group(1), ""), val
+                r"\$\{(\w+)(?::-([^}]*))?\}",
+                lambda m: env.get(m.group(1), m.group(2) or ""),
+                val,
             )
             env[key] = val
         return env
@@ -396,12 +398,16 @@ def c_ciimg013(x):
 
 def c_ciimg014(x):
     text = x._text(".env.dist") + x.pipeline
-    return (
-        ":82" not in re.sub(r"[0-9]:82\b", "", text)
-        and "=:82" not in text
-        and 'tag: "82"' not in text,
-        "no PHP 8.2 runtime",
+    has_82 = (
+        ":82" in re.sub(r"[0-9]:82\b", "", text)
+        or "=:82" in text
+        or 'tag: "82"' in text
+        # Standard PHP image tags use the dotted form (e.g. php:8.2-fpm-alpine),
+        # not just the NR registry's bare :82 convention.
+        or ":8.2" in text
+        or "8.2-" in text
     )
+    return (not has_82, "no PHP 8.2 runtime")
 
 
 def c_ciimg015(x):
@@ -532,6 +538,7 @@ def c_sc007(x):
                 k = i + 1
                 while k < len(lines) and (
                     not lines[k].strip()
+                    or lines[k].lstrip().startswith("#")
                     or (len(lines[k]) - len(lines[k].lstrip())) > indent
                 ):
                     block.append(lines[k])
@@ -658,9 +665,9 @@ def c_dro016(x):
     if "FileWriter" not in s:
         return (True, "no FileWriter")
     # Every FileWriter must log to a php:// stream, never a disk path.
-    for m in re.finditer(r"FileWriter::class\s*=>\s*\[(.*?)\]", s, re.S):
+    for m in re.finditer(r"FileWriter(?:::class)?['\"]?\s*=>\s*\[(.*?)\]", s, re.S):
         block = m.group(1)
-        lf = re.search(r"'logFile'\s*=>\s*'([^']+)'", block)
+        lf = re.search(r"""['"]logFile['"]\s*=>\s*['"]([^'"]+)['"]""", block)
         if not lf or not lf.group(1).startswith("php://"):
             return (False, "FileWriter not pointed at php:// stream")
     return (True, "logs routed to php://stderr")
@@ -804,6 +811,7 @@ def _anchor_blocks(lines: list[str]) -> dict[str, str]:
             block, k = [lines[i]], i + 1
             while k < len(lines) and (
                 not lines[k].strip()
+                or lines[k].lstrip().startswith("#")
                 or (len(lines[k]) - len(lines[k].lstrip())) > indent
             ):
                 block.append(lines[k])
