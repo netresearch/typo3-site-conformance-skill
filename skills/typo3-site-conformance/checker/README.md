@@ -80,13 +80,21 @@ live only in comments), and the CI gate installs `git` so the committed-secret
 rules enforce there. Known limits that a determined author can still slip past —
 do not rely on the gate alone:
 
-- **CI supply chain** (`SC-001/002/003/004/011`) is asserted by substring on the
-  *comment-stripped* pipeline text, not by parsing the job graph: a step present
-  in the YAML but not wired into the build plan would still pass.
-- **Service classification** (`DRO-001/003`) exempts the names `app/setup/backup`
-  by convention; a long-running daemon given one of those names escapes the
-  healthcheck/restart rules.
-- **External-catalogue parity** is asserted, not enforced (see below).
+- **CI supply chain** (`SC-001/002/003/004`) requires the keyword on the
+  *comment-stripped* pipeline text **and** within the parsed job graph
+  (`pipeline_doc["jobs"]`), so a step that lives only in an unreferenced anchor
+  no longer passes; `SC-011` parses the graph fully. Residual: it does not
+  deep-walk `plan → task → run`, so a keyword wired into a job but in a step that
+  never executes is not distinguished — narrowed, not closed.
+- **Service classification** (`DRO-001/002/003`) exempts the names
+  `app/setup/backup`, but only when they are *not* declared long-running: a
+  service with a `restart` policy is treated as persistent regardless of name, so
+  a daemon cannot dodge the healthcheck/restart rules by being named `app`.
+  Residual: a restart-less daemon given one of those names still escapes — a
+  degenerate config. Narrowed, not closed.
+- **External-catalogue parity** is asserted against a pinned mirror
+  (`CATALOGUE_SNAPSHOT` date + `CATALOGUE_SHA256` drift guard in `gen_rules.py`),
+  not enforced by re-fetching the OAuth-gated source page (see below).
 
 These limits are documented inline above; the heuristic is a structural gate,
 not a security boundary.
@@ -94,9 +102,12 @@ not a security boundary.
 ## Regenerating the ruleset
 
 `rules.json` is produced by `gen_rules.py`, which **embeds** the 73-rule
-catalogue inline. Edit the catalogue in `gen_rules.py` and regenerate
-`rules.json`. (`typo3-14-gold` and `typo3-project-standard` track the same
-ruleset.)
+catalogue inline as a pinned mirror of the published ruleset. Edit the catalogue
+in `gen_rules.py` and regenerate `rules.json`. (`typo3-14-gold` and
+`typo3-project-standard` track the same ruleset.) When the edit intentionally
+tracks a new revision of the published page, bump `CATALOGUE_SNAPSHOT` and set
+`CATALOGUE_SHA256` to the value the script prints — `gen_rules.py` warns if the
+inline catalogue drifts from the pinned hash, catching an accidental edit.
 
 ```bash
 python3 gen_rules.py

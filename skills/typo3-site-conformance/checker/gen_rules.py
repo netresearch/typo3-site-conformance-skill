@@ -4,6 +4,17 @@
 Source of truth: the published conformance ruleset
 (https://pages.nrdev.de/typo3/typo3-project-standard → Conformance Ruleset).
 
+The catalogue below is a PINNED MIRROR of that published ruleset. The source page
+is OAuth-gated and cannot be fetched in CI, so parity with the live page is
+*asserted* against a recorded snapshot rather than *enforced* by re-fetching
+(CONF-07). Two guards make the mirror auditable:
+  - CATALOGUE_SNAPSHOT — the date the inline RULES were last reconciled with the
+    published page.
+  - CATALOGUE_SHA256 — the SHA-256 of the canonical RULES tuples; main() recomputes
+    it and warns on mismatch, so an accidental edit of the embedded copy is caught.
+When intentionally updating RULES to track the published page, bump CATALOGUE_SNAPSHOT
+and refresh CATALOGUE_SHA256 (run this script — it prints the new value).
+
 Each rule carries a `scope`:
   - "repo"     : statically checkable against this repository; the gold project
                  must pass 100 % of these.
@@ -12,8 +23,14 @@ Each rule carries a `scope`:
                  by-design note, excluded from the gold-project score.
 """
 
+import hashlib
 import json
 import pathlib
+
+# Pinned mirror of the published ruleset — see module docstring (CONF-07).
+CATALOGUE_VERSION = "1.0.0"
+CATALOGUE_SNAPSHOT = "2026-06-09"
+CATALOGUE_SHA256 = "626d86c2cfee91850db779b0fc49f1d1446badfbe2f10c6847e82b18f773bccf"
 
 # (code, category, severity, scope, requirement)
 RULES = [
@@ -510,6 +527,16 @@ RULES = [
 WEIGHTS = {"error": 10, "warning": 5, "info": 1}
 
 
+def _catalogue_sha256() -> str:
+    """SHA-256 of the canonical RULES tuples — the drift guard for the pinned
+    mirror (CONF-07)."""
+    return hashlib.sha256(
+        # Explicit separators so the digest does not depend on json formatting
+        # defaults (a stable, self-documenting canonical form).
+        json.dumps(RULES, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+
+
 def main() -> None:
     rules = [
         {
@@ -522,15 +549,28 @@ def main() -> None:
         }
         for (code, category, severity, scope, requirement) in RULES
     ]
+    digest = _catalogue_sha256()
+    if digest != CATALOGUE_SHA256:
+        print(
+            "WARNING: catalogue drift — RULES changed since the pinned snapshot.\n"
+            f"  pinned   CATALOGUE_SHA256 = {CATALOGUE_SHA256}\n"
+            f"  computed                  = {digest}\n"
+            "  If this edit is intentional, bump CATALOGUE_SNAPSHOT and set "
+            "CATALOGUE_SHA256 to the computed value."
+        )
     out = {
-        "version": "1.0.0",
+        "version": CATALOGUE_VERSION,
         "reference": "https://pages.nrdev.de/typo3/typo3-project-standard",
+        "catalogue_snapshot": CATALOGUE_SNAPSHOT,
+        "catalogue_sha256": digest,
         "weights": WEIGHTS,
         "rules": rules,
     }
     path = pathlib.Path(__file__).with_name("rules.json")
     path.write_text(json.dumps(out, indent=2) + "\n", encoding="utf-8")
-    print(f"wrote {len(rules)} rules to {path}")
+    print(
+        f"wrote {len(rules)} rules to {path} (snapshot {CATALOGUE_SNAPSHOT}, sha {digest[:12]})"
+    )
 
 
 if __name__ == "__main__":

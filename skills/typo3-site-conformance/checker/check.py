@@ -48,6 +48,22 @@ def _expand_placeholders(text: str, lookup) -> str:
 # Context: load every artefact once.
 # --------------------------------------------------------------------------- #
 JOB_SERVICES = {"app", "setup", "backup"}  # one-shot / idle runners (exempt)
+# restart values that do NOT mark a long-running service; any other value
+# (including the `on-failure:<max>` retry form) means the service is meant to stay
+# running and is therefore treated as persistent regardless of its name.
+_NO_RESTART = (None, "", "no")
+
+
+def _is_job_service(name: str, svc) -> bool:
+    """A one-shot / idle runner, exempt from the healthcheck + restart-policy
+    rules. Name-based by default, but a service that declares a restart policy is
+    treated as long-running regardless of its name, so a daemon cannot dodge the
+    persistent-service rules merely by being named app/setup/backup (CONF-05).
+    Residual: a restart-less daemon given such a name still escapes — a degenerate
+    config, not a realistic one — so this narrows the heuristic, it does not close
+    it."""
+    svc = svc if isinstance(svc, dict) else {}
+    return name in JOB_SERVICES and svc.get("restart") in _NO_RESTART
 
 
 class Ctx:
@@ -153,7 +169,7 @@ class Ctx:
         return self.resolve_image(svc.get("image", ""))
 
     def persistent_services(self) -> list[str]:
-        return [n for n in self.services if n not in JOB_SERVICES]
+        return [n for n, svc in self.services.items() if not _is_job_service(n, svc)]
 
     def cache_service(self):
         for name, svc in self.services.items():
@@ -491,7 +507,7 @@ def c_dro002(x):
             cond = (spec or {}).get("condition") if isinstance(spec, dict) else None
             if not cond:
                 return (False, f"{n}->{target} missing condition")
-            if target in JOB_SERVICES:
+            if _is_job_service(target, x.services.get(target)):
                 if cond not in ("service_completed_successfully", "service_started"):
                     return (False, f"{n}->{target} bad job condition {cond}")
             elif cond != "service_healthy":
@@ -551,21 +567,45 @@ def c_dro013(x):
     )
 
 
+def _pipeline_jobs_text(x) -> str:
+    """Serialized text of the PARSED Concourse job graph. YAML resolves `*alias`
+    references into the jobs that use them, so a supply-chain step wired into a
+    real job's plan appears here while one defined only in an UNREFERENCED anchor
+    does not. ANDed with the comment-stripped text match, this narrows CONF-03 (a
+    step must live in a job, not a stray anchor); it does not deep-walk the plan,
+    so it stays robust to legitimate pipeline refactors. Cached on `x` because the
+    four supply-chain checks each call it."""
+    cached = getattr(x, "_jobs_text_cache", None)
+    if cached is None:
+        doc = x.pipeline_doc if isinstance(x.pipeline_doc, dict) else {}
+        jobs = doc.get("jobs", [])
+        cached = json.dumps(jobs if isinstance(jobs, list) else [])
+        x._jobs_text_cache = cached
+    return cached
+
+
 def c_sc001(x):
-    return ("composer audit" in x.pipeline_code, "composer audit in pipeline")
+    return (
+        "composer audit" in x.pipeline_code
+        and "composer audit" in _pipeline_jobs_text(x),
+        "composer audit wired into a build job",
+    )
 
 
 def c_sc002(x):
     return (
-        "trivy" in x.pipeline_code and "--exit-code 1" in x.pipeline_code,
-        "trivy gate --exit-code 1",
+        "trivy" in x.pipeline_code
+        and "--exit-code 1" in x.pipeline_code
+        and "trivy" in _pipeline_jobs_text(x),
+        "trivy gate --exit-code 1 wired into a build job",
     )
 
 
 def c_sc003(x):
     return (
-        bool(re.search(r"cyclonedx|spdx|syft", x.pipeline_code)),
-        "SBOM generation in pipeline",
+        bool(re.search(r"cyclonedx|spdx|syft", x.pipeline_code))
+        and bool(re.search(r"cyclonedx|spdx|syft", _pipeline_jobs_text(x))),
+        "SBOM generation wired into a build job",
     )
 
 
@@ -685,7 +725,18 @@ def _cache_cmd(x):
 
 
 def c_dro004(x):
-    return ("--requirepass" in _cache_cmd(x), "cache requires auth")
+    # Auth may be set on the CLI (`--requirepass <pw>`) or via a config-file /
+    # entrypoint form that keeps the secret out of argv and the process list (the
+    # `requirepass` directive written into a config file by the entrypoint).
+    # Assert the invariant — auth is required — not one specific argv shape.
+    # NB: this couples to the `requirepass` token appearing in the command or
+    # entrypoint; a different config-writing mechanism would need it widened.
+    _, svc = x.cache_service()
+    svc = svc if isinstance(svc, dict) else {}
+    ep = svc.get("entrypoint") or ""  # explicit null entrypoint -> "" not "None"
+    ep_text = " ".join(ep) if isinstance(ep, list) else str(ep)
+    auth = "requirepass" in (_cache_cmd(x) + " " + ep_text)
+    return (auth, "cache requires auth")
 
 
 def c_dro005(x):
@@ -817,7 +868,10 @@ def c_dro011(x):
 
 
 def c_sc004(x):
-    return ("cosign" in x.pipeline_code, "cosign signing in pipeline")
+    return (
+        "cosign" in x.pipeline_code and "cosign" in _pipeline_jobs_text(x),
+        "cosign signing wired into a build job",
+    )
 
 
 def c_sc005(x):

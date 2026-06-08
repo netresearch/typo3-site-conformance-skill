@@ -1,6 +1,8 @@
 {
   "version": "1.0.0",
   "reference": "https://pages.nrdev.de/typo3/typo3-project-standard",
+  "catalogue_snapshot": "2026-06-09",
+  "catalogue_sha256": "626d86c2cfee91850db779b0fc49f1d1446badfbe2f10c6847e82b18f773bccf",
   "weights": {
     "error": 10,
     "warning": 5,
