@@ -68,6 +68,7 @@ class Ctx:
         self.gitlabci = self._text(".gitlab-ci.yml")
         self.pipeline = self._text("ci/pipeline.yml")
         self.pipeline_code = _strip_yaml_comments(self.pipeline)
+        self.pipeline_doc = self._yaml("ci/pipeline.yml", _Loader) or {}
         self.gitignore = self._text(".gitignore")
         self.envdist = self._parse_env(".env.dist")
         self.ci_text = self._collect_ci_text()
@@ -276,14 +277,29 @@ def c_struct005(x):
 
 
 def c_struct007(x):
+    # Assert the .gitignore excludes the COMPOSER PROJECT's vendor/var/public at
+    # their actual path for this layout — `app/...` under the app-wrapper layout,
+    # root-level otherwise. Matching the project path (not a bare `/vendor`
+    # substring) catches an ignore that names the wrong location: a root-anchored
+    # `/vendor/` does not protect `app/vendor/`.
     g = x.gitignore
+    prefix = "app/" if x.proj != x.root else ""
+
+    def _ignored(directory: str) -> bool:
+        # Accept the layout-aware path with the leading slash optional and the
+        # entry being the directory or its contents — `/app/vendor/`,
+        # `app/vendor`, `/app/public/*` all qualify. Reject a non-layout entry
+        # (`/vendor/`, bare `vendor/`) that does not name the project path.
+        pat = rf"(?m)^/?{re.escape(prefix)}{directory}(/.*)?\s*$"
+        return bool(re.search(pat, g))
+
     ok = (
-        "/vendor" in g
-        and "/var/" in g
-        and "/public/" in g
+        _ignored("vendor")
+        and _ignored("var")
+        and _ignored("public")
         and bool(re.search(r"\.(prod|stage)\.env|\.env\.(production|staging)", g))
     )
-    return (ok, ".gitignore excludes vendor/var/public + live-env")
+    return (ok, f".gitignore excludes {prefix}vendor/var/public + live-env")
 
 
 def c_struct008(x):
@@ -609,9 +625,34 @@ def c_sc010(x):
 
 
 def c_sc011(x):
+    # Assert the actual gate, not a keyword: a `test` job that genuinely runs the
+    # suite, AND a `build-and-sign` job whose plan is gated on it (`passed: [test]`).
+    # The old substring search passed on a `phpunit` mention anywhere — even a
+    # comment or an orphaned/disabled job disconnected from the build DAG.
+    # Defensive against malformed YAML: a non-dict document, or `jobs`/`plan`/
+    # `passed` holding an unexpected type, must yield a clean failure, not a crash.
+    doc = x.pipeline_doc if isinstance(x.pipeline_doc, dict) else {}
+    job_list = doc.get("jobs")
+    jobs = {
+        j.get("name"): j
+        for j in (job_list if isinstance(job_list, list) else [])
+        if isinstance(j, dict)
+    }
+    test_job = jobs.get("test")
+    sign_job = jobs.get("build-and-sign")
+    if not isinstance(test_job, dict) or not isinstance(sign_job, dict):
+        return (False, "test gate: missing 'test' or 'build-and-sign' job")
+    runs_tests = bool(re.search(r"phpunit|functional|smoke", str(test_job)))
+    plan = sign_job.get("plan")
+    gated = any(
+        isinstance(step, dict)
+        and isinstance(step.get("passed"), list)
+        and "test" in step["passed"]
+        for step in (plan if isinstance(plan, list) else [])
+    )
     return (
-        bool(re.search(r"phpunit|functional|smoke", x.pipeline_code)),
-        "test gate present",
+        runs_tests and gated,
+        "build-and-sign gated on the test job (passed: [test])",
     )
 
 
