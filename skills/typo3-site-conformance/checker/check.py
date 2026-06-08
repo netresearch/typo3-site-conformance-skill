@@ -68,6 +68,7 @@ class Ctx:
         self.gitlabci = self._text(".gitlab-ci.yml")
         self.pipeline = self._text("ci/pipeline.yml")
         self.pipeline_code = _strip_yaml_comments(self.pipeline)
+        self.pipeline_doc = self._yaml("ci/pipeline.yml", _Loader) or {}
         self.gitignore = self._text(".gitignore")
         self.envdist = self._parse_env(".env.dist")
         self.ci_text = self._collect_ci_text()
@@ -276,14 +277,20 @@ def c_struct005(x):
 
 
 def c_struct007(x):
+    # Assert the .gitignore excludes the COMPOSER PROJECT's vendor/var/public at
+    # their actual path for this layout — `app/...` under the app-wrapper layout,
+    # root-level otherwise. Matching the exact project path (not a bare `/vendor`
+    # substring) catches an ignore that names the wrong location: a root-anchored
+    # `/vendor/` does not protect `app/vendor/`, and vice-versa.
     g = x.gitignore
+    prefix = "app/" if x.proj != x.root else ""
     ok = (
-        "/vendor" in g
-        and "/var/" in g
-        and "/public/" in g
+        f"/{prefix}vendor/" in g
+        and f"/{prefix}var/" in g
+        and f"/{prefix}public/" in g
         and bool(re.search(r"\.(prod|stage)\.env|\.env\.(production|staging)", g))
     )
-    return (ok, ".gitignore excludes vendor/var/public + live-env")
+    return (ok, f".gitignore excludes {prefix}vendor/var/public + live-env")
 
 
 def c_struct008(x):
@@ -609,9 +616,27 @@ def c_sc010(x):
 
 
 def c_sc011(x):
+    # Assert the actual gate, not a keyword: a `test` job that genuinely runs the
+    # suite, AND a `build-and-sign` job whose plan is gated on it (`passed: [test]`).
+    # The old substring search passed on a `phpunit` mention anywhere — even a
+    # comment or an orphaned/disabled job disconnected from the build DAG.
+    jobs = {
+        j.get("name"): j
+        for j in (x.pipeline_doc.get("jobs") or [])
+        if isinstance(j, dict)
+    }
+    test_job = jobs.get("test")
+    sign_job = jobs.get("build-and-sign")
+    if not test_job or not sign_job:
+        return (False, "test gate: missing 'test' or 'build-and-sign' job")
+    runs_tests = bool(re.search(r"phpunit|functional|smoke", str(test_job)))
+    gated = any(
+        isinstance(step, dict) and "test" in (step.get("passed") or [])
+        for step in (sign_job.get("plan") or [])
+    )
     return (
-        bool(re.search(r"phpunit|functional|smoke", x.pipeline_code)),
-        "test gate present",
+        runs_tests and gated,
+        "build-and-sign gated on the test job (passed: [test])",
     )
 
 
