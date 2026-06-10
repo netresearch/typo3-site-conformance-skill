@@ -60,3 +60,5 @@ Netresearch-internal and optional. Propose rule changes in `gen_rules.py`.
 See `references/migration-from-reference.md` for transforming a legacy
 `support/typo3-NN/app`-style repo (app/ wrapper, `build/config`, committed
 secrets, Redis, `:latest`) into a conformant one.
+`references/sealed-settings-php.md` covers operating the read-only
+`settings.php` (complete ext-config key set; re-seal after checkout).
