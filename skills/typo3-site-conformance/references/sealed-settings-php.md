@@ -4,7 +4,11 @@ The gold standard keeps `config/system/settings.php` committed, secret-free and
 **read-only** (`chmod 0444`): TYPO3 rewrites the file on boot whenever the
 runtime can write it (stripping comments, normalizing `::class` to strings,
 persisting extension defaults), and the absent write bit is what enforces the
-managed-config contract. TYPO3 tolerates the failed boot-time write. Two
+managed-config contract.
+
+Not every blocked write behaves the same: the routine **boot-time rewrite** is
+caught — it fails silently and the page still renders — but the **ext-conf
+synchronize** write below is an uncaught hard failure (HTTP 500). Two
 operational rules follow — both verified end-to-end on `typo3-14-gold`.
 
 ## Adding an extension: pre-populate the complete ext-config key set
@@ -45,13 +49,15 @@ dirty working tree.
 - the install path and the image build re-seal
   (`chmod 0444 config/system/settings.php` in the install script and
   Dockerfile; the carrier's `rsync -a` preserves the mode), and
-- a `post-checkout` git hook re-seals on every checkout, e.g. captainhook:
+- a `post-checkout` git hook re-seals on every checkout, e.g. captainhook
+  (the path is relative to the repo root — prefix the composer-project dir in
+  a wrapper layout, e.g. `app/config/system/settings.php` on `typo3-14-gold`):
 
 ```json
 "post-checkout": {
     "enabled": true,
     "actions": [
-        { "action": "chmod 0444 app/config/system/settings.php" }
+        { "action": "chmod 0444 config/system/settings.php" }
     ]
 }
 ```
