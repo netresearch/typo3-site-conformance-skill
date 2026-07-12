@@ -1,0 +1,252 @@
+[
+  {
+    "name": "sealed-settings-php-complete-keyset",
+    "prompt": "I'm adding praetorius/vite-asset-collector to this TYPO3 gold-standard site. config/system/settings.php is committed read-only (chmod 0444). What do I need to do in settings.php before requiring the extension, and what happens if I skip it?",
+    "assertions": [
+      {
+        "type": "content_regex",
+        "value": "0444|chmod u\\+w",
+        "description": "Knows settings.php is sealed read-only (0444) and needs a temporary chmod to edit intentionally"
+      },
+      {
+        "type": "content_regex",
+        "value": "every key|complete|all.*keys|ext_conf_template",
+        "description": "Requires pre-populating the COMPLETE ext-config key set from ext_conf_template.txt, not just the overridden keys"
+      },
+      {
+        "type": "content_regex",
+        "value": "500|synchroniz|not writable|1346323822",
+        "description": "Names the actual failure mode -- a missing key triggers a write attempt on the sealed file, producing an uncaught HTTP 500"
+      }
+    ]
+  },
+  {
+    "name": "settings-php-checkout-reseal",
+    "prompt": "After a git checkout or a fresh clone, our sealed settings.php always comes back writable and TYPO3 keeps mangling it. Why, and what's the fix?",
+    "assertions": [
+      {
+        "type": "content_contains",
+        "value": "post-checkout",
+        "description": "Recommends a post-checkout git hook to re-seal the file on every checkout"
+      },
+      {
+        "type": "content_regex",
+        "value": "mode bit|permission bit|does not store",
+        "description": "Explains git does not store the file's permission/mode bit, so the seal doesn't survive a checkout"
+      }
+    ]
+  },
+  {
+    "name": "compose-yaml-not-docker-compose-yml",
+    "prompt": "Review this TYPO3 site repo's container setup for gold-standard conformance. It has a docker-compose.yml at the root.",
+    "assertions": [
+      {
+        "type": "content_contains",
+        "value": "compose.yaml",
+        "description": "Flags the filename -- the gold standard wants compose.yaml, not docker-compose.yml"
+      },
+      {
+        "type": "content_regex",
+        "value": "rename|instead of|not compose\\.yaml",
+        "description": "Explicitly recommends renaming rather than leaving it as-is"
+      }
+    ]
+  },
+  {
+    "name": "third-party-image-digest-pinning",
+    "prompt": "Our compose.yaml uses `image: postgres:latest`. Is that conformant for a gold-standard TYPO3 site?",
+    "assertions": [
+      {
+        "type": "content_regex",
+        "value": "@sha256|digest",
+        "description": "Requires pinning third-party images by @sha256 digest (or at minimum a non-floating tag)"
+      },
+      {
+        "type": "content_contains",
+        "value": "latest",
+        "description": "Flags the floating :latest tag as the problem"
+      }
+    ]
+  },
+  {
+    "name": "first-party-registry-floating-tag-exception",
+    "prompt": "Can our own registry.netresearch.de/typo3-sitepackage image track a floating tag, or does every image need a digest pin?",
+    "assertions": [
+      {
+        "type": "content_contains",
+        "value": "registry.netresearch.de",
+        "description": "Knows the specific exception -- first-party images on this internal registry may track a floating tag"
+      },
+      {
+        "type": "content_regex",
+        "value": "internal|trusted",
+        "description": "Explains the exception is because first-party images are internal and trusted, unlike third-party ones"
+      }
+    ]
+  },
+  {
+    "name": "no-direct-docker-socket-mount",
+    "prompt": "A service in our compose.yaml mounts /var/run/docker.sock directly so it can manage sibling containers (e.g. the scheduler). Conformant?",
+    "assertions": [
+      {
+        "type": "content_regex",
+        "value": "socket.?proxy",
+        "description": "Correct pattern for a service needing Docker API access is via a socket-proxy, not a direct docker.sock mount"
+      },
+      {
+        "type": "content_regex",
+        "value": "not conformant|violat|flag|direct.*mount",
+        "description": "Flags the direct docker.sock mount as a violation"
+      }
+    ]
+  },
+  {
+    "name": "settings-php-secret-free-env-driven",
+    "prompt": "Our config/system/settings.php has the database password hardcoded as a literal string. What's wrong, and how should it be done instead?",
+    "assertions": [
+      {
+        "type": "content_regex",
+        "value": "env(ironment)?( variable)?",
+        "description": "settings.php must be secret-free and env-driven, not contain literal credentials"
+      },
+      {
+        "type": "content_contains",
+        "value": "secret",
+        "description": "Names this as a committed-secret violation"
+      }
+    ]
+  },
+  {
+    "name": "extension-setup-not-a-seal-safe-alternative",
+    "prompt": "Instead of manually editing settings.php, can I just run `typo3 extension:setup` to populate the new extension's config?",
+    "assertions": [
+      {
+        "type": "content_contains",
+        "value": "extension:setup",
+        "description": "Names the specific TYPO3 CLI command being asked about"
+      },
+      {
+        "type": "content_regex",
+        "value": "no[,.]|not (an alternative|a substitute)|writes settings\\.php",
+        "description": "Explicitly rejects it -- extension:setup writes settings.php by design, defeating the seal"
+      }
+    ]
+  },
+  {
+    "name": "site-vs-extension-scope-gate",
+    "prompt": "Can I use this skill to assess an ext_emconf.php-based TYPO3 extension repo (a library, not a deployable project) for conformance?",
+    "assertions": [
+      {
+        "type": "content_contains",
+        "value": "typo3-conformance",
+        "description": "Gates correctly to the sibling skill for extension-scoped repos -- this skill covers site/project repos only"
+      },
+      {
+        "type": "content_regex",
+        "value": "N/A|not (this|applicable)|instead",
+        "description": "States this skill does not apply to a pure extension repo"
+      }
+    ]
+  },
+  {
+    "name": "bundled-checker-no-external-checkout",
+    "prompt": "How do I actually run the automated conformance check against a site repo, without checking out anything external first?",
+    "assertions": [
+      {
+        "type": "content_contains",
+        "value": "check.py",
+        "description": "Names the bundled checker script that ships inside the skill itself"
+      },
+      {
+        "type": "content_contains",
+        "value": "pyyaml",
+        "description": "Names the only external dependency the checker needs"
+      }
+    ]
+  },
+  {
+    "name": "valkey-not-redis",
+    "prompt": "Our TYPO3 site uses Redis for caching. Does the gold standard require a specific cache backend?",
+    "assertions": [
+      {
+        "type": "content_contains",
+        "value": "Valkey",
+        "description": "The gold standard specifies Valkey, not Redis, for the deploy family"
+      },
+      {
+        "type": "content_regex",
+        "value": "auth|eviction",
+        "description": "Also expects auth and eviction configuration on the cache service"
+      }
+    ]
+  },
+  {
+    "name": "valkey-no-persistence-cache-only",
+    "prompt": "Should our Valkey cache instance persist data to disk, and what eviction policy should it use?",
+    "assertions": [
+      {
+        "type": "content_regex",
+        "value": "no persist|persistence.*(off|disabled|false)|without persist",
+        "description": "The cache-only Valkey instance should run without persistence, since it holds only regenerable cache data"
+      },
+      {
+        "type": "content_contains",
+        "value": "eviction",
+        "description": "Names the eviction policy as the other required setting"
+      }
+    ]
+  },
+  {
+    "name": "architecture-rules-advisory-not-gating",
+    "prompt": "The checker flagged that our TYPO3 site isn't split into three separate repos. Does that block conformance?",
+    "assertions": [
+      {
+        "type": "content_regex",
+        "value": "advisory|not.*(gat|block)",
+        "description": "Architecture/estate-level rules like the three-repo split are advisory, reported but not gating"
+      },
+      {
+        "type": "content_regex",
+        "value": "report|note",
+        "description": "Recommends reporting it rather than treating it as a hard failure"
+      }
+    ]
+  },
+  {
+    "name": "ci-supply-chain-gate-order",
+    "prompt": "What's the expected order of supply-chain gates in this site repo's CI pipeline?",
+    "assertions": [
+      {
+        "type": "content_regex",
+        "value": "composer audit",
+        "description": "Names composer audit as an early CI gate"
+      },
+      {
+        "type": "content_regex",
+        "value": "[Tt]rivy",
+        "description": "Names Trivy as the container vulnerability gate"
+      },
+      {
+        "type": "content_regex",
+        "value": "SBOM|cosign",
+        "description": "Names SBOM generation and cosign signing as later supply-chain steps"
+      }
+    ]
+  },
+  {
+    "name": "gitignore-excludes-live-env-files",
+    "prompt": "Our .gitignore excludes vendor/ and var/ but a colleague accidentally committed a .env.production file with live credentials last month. What conformance rule should have caught this?",
+    "assertions": [
+      {
+        "type": "content_regex",
+        "value": "live.?env|\\.env\\.production|\\.env\\.local",
+        "description": "The STRUCT family's .gitignore rule specifically requires excluding live-environment files, not just vendor/var"
+      },
+      {
+        "type": "content_regex",
+        "value": "gitignore|SEC",
+        "description": "Names the rule family responsible (STRUCT gitignore coverage / SEC secret handling)"
+      }
+    ]
+  }
+]
