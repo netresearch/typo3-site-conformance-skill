@@ -166,7 +166,7 @@
   },
   {
     "name": "valkey-not-redis",
-    "prompt": "Our TYPO3 site uses Redis for caching. Does the gold standard require a specific cache backend?",
+    "prompt": "Our TYPO3 site uses Redis for caching. Does the gold standard require a specific cache backend, and what configuration/security settings are expected for it?",
     "assertions": [
       {
         "type": "content_contains",
@@ -190,9 +190,9 @@
         "description": "The cache-only Valkey instance should run without persistence, since it holds only regenerable cache data"
       },
       {
-        "type": "content_contains",
-        "value": "eviction",
-        "description": "Names the eviction policy as the other required setting"
+        "type": "content_regex",
+        "value": "allkeys-lru",
+        "description": "Names the specific allkeys-lru eviction policy as the required setting"
       }
     ]
   },
@@ -230,6 +230,11 @@
         "type": "content_regex",
         "value": "SBOM|cosign",
         "description": "Names SBOM generation and cosign signing as later supply-chain steps"
+      },
+      {
+        "type": "content_regex",
+        "value": "composer audit.*[Tt]rivy.*(SBOM|cosign)",
+        "description": "Verifies the correct chronological order of the supply-chain gates"
       }
     ]
   },
@@ -244,8 +249,8 @@
       },
       {
         "type": "content_regex",
-        "value": "gitignore|SEC",
-        "description": "Names the rule family responsible (STRUCT gitignore coverage / SEC secret handling)"
+        "value": "STRUCT-006|STRUCT-007|SEC-004",
+        "description": "Names the specific rule code (STRUCT-006, STRUCT-007, or SEC-004) responsible"
       }
     ]
   }
