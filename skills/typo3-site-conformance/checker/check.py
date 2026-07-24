@@ -154,6 +154,7 @@ class Ctx:
                 capture_output=True,
                 text=True,
                 timeout=10,
+                check=False,
             )
             return r.returncode == 0
         except (FileNotFoundError, OSError, subprocess.SubprocessError):
@@ -222,7 +223,7 @@ def settings_secret_free(text: str) -> bool:
         val = m.group(3).strip()
         if not val:
             continue  # empty default — fine
-        if val.startswith("%env") or val.startswith("$"):
+        if val.startswith(("%env", "$")):
             continue  # environment-sourced, not committed
         return False
     return True
@@ -349,7 +350,7 @@ def c_ciimg001(x):
 
 
 def c_ciimg002(x):
-    name, svc = x.cache_service()
+    _name, svc = x.cache_service()
     img = x.resolve_image((svc or {}).get("image", "")) if svc else ""
     return (img.startswith("valkey/valkey"), f"cache image = {img or 'none'}")
 
@@ -552,7 +553,7 @@ def c_ci001(x):
 def c_ci002(x):
     return (
         "mount=type=secret" in x.dockerfile
-        and not re.search(r"^ARG\s+COMPOSER_AUTH", x.dockerfile, re.M),
+        and not re.search(r"^ARG\s+COMPOSER_AUTH", x.dockerfile, re.MULTILINE),
         "COMPOSER_AUTH via BuildKit secret",
     )
 
@@ -704,11 +705,11 @@ def c_sc013(x):
     # Strip inline comments first so `image: redis # note` cannot slip past the
     # end-anchored regexes.
     text = _strip_yaml_comments(x._text("compose.yaml") + "\n" + x.override_text)
-    if re.search(r"image:\s*redis\s*$", text, re.M):
+    if re.search(r"image:\s*redis\s*$", text, re.MULTILINE):
         return (False, "runtime images pinned (bare redis)")
     # :latest is acceptable only on a first-party Netresearch-registry image;
     # any third-party :latest is a floating, non-reproducible pin.
-    for m in re.finditer(r"image:\s*(\S+:latest)\s*$", text, re.M):
+    for m in re.finditer(r"image:\s*(\S+:latest)\s*$", text, re.MULTILINE):
         if not _is_first_party(m.group(1)):
             return (False, f"third-party :latest image ({m.group(1)})")
     return (True, "runtime images pinned (first-party :latest allowed)")
@@ -762,7 +763,7 @@ def c_dro009(x):
 
 
 def c_dro010(x):
-    froms = re.findall(r"^FROM\s+(\S+)", x.dockerfile, re.M)
+    froms = re.findall(r"^FROM\s+(\S+)", x.dockerfile, re.MULTILINE)
     if not froms:
         return (False, "no FROM line")
     last = froms[-1]
@@ -798,7 +799,7 @@ def c_dro016(x):
     # Anchor to the TYPO3 FileWriter class — a preceding letter means it is a
     # different class (e.g. MyCustomFileWriter), which we must not match.
     for m in re.finditer(
-        r"(?<![A-Za-z])FileWriter(?:::class)?['\"]?\s*=>\s*\[(.*?)\]", s, re.S
+        r"(?<![A-Za-z])FileWriter(?:::class)?['\"]?\s*=>\s*\[(.*?)\]", s, re.DOTALL
     ):
         block = m.group(1)
         lf = re.search(r"""['"]logFile['"]\s*=>\s*['"]([^'"]+)['"]""", block)
@@ -885,7 +886,7 @@ def c_sc006(x):
 def c_sec001(x):
     text = x._text("compose.yaml")
     return (
-        not re.search(r"image:\s*redis\s*$", text, re.M)
+        not re.search(r"image:\s*redis\s*$", text, re.MULTILINE)
         and not re.search(r"image:\s*redis:latest", text),
         "no bare/latest redis image",
     )
