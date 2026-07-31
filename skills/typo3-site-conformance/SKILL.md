@@ -57,8 +57,8 @@ Netresearch-internal and optional. Propose rule changes in `gen_rules.py`.
 3. **Scope.** Architecture/estate/runtime rules (three-repo split, uptime, php-fpm status, ci-colocation) are *advisory* — report, don't gate.
 4. **Fix → re-score.** Keep repo-scope rules at 100 %.
 
-See `references/migration-from-reference.md` for transforming a legacy
-`support/typo3-NN/app`-style repo (app/ wrapper, `build/config`, committed
-secrets, Redis, `:latest`) into a conformant one.
-`references/sealed-settings-php.md` covers operating the read-only
-`settings.php` (complete ext-config key set; re-seal after checkout).
+See `references/migration-from-reference.md` for migrating a legacy
+`support/typo3-NN/app` repo (app/ wrapper, `build/config`, secrets, Redis,
+`:latest`). `references/sealed-settings-php.md` covers the read-only
+`settings.php`. `references/database-seeds.md` covers `data/*.sql` seeds with
+fixed uids: silent `INSERT IGNORE`, uid bands, translation pids.
