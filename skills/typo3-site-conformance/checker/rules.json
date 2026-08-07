@@ -1,8 +1,8 @@
 {
   "version": "1.0.0",
   "reference": "https://pages.nrdev.de/typo3/typo3-project-standard",
-  "catalogue_snapshot": "2026-06-09",
-  "catalogue_sha256": "626d86c2cfee91850db779b0fc49f1d1446badfbe2f10c6847e82b18f773bccf",
+  "catalogue_snapshot": "2026-08-07",
+  "catalogue_sha256": "770143fb33b2c55a4399958c3ab44678112a8520fae9b34815f1a4e162a90847",
   "weights": {
     "error": 10,
     "warning": 5,
@@ -295,7 +295,7 @@
       "severity": "error",
       "weight": 10,
       "scope": "repo",
-      "requirement": "SBOM must be generated for every production image build"
+      "requirement": "SBOM must be declared (lockfile-derived, CycloneDX >= 1.6, lifecycles: build) for every production image build; scanner output alone does not satisfy this rule"
     },
     {
       "code": "SC-007",
@@ -352,6 +352,30 @@
       "weight": 5,
       "scope": "repo",
       "requirement": "Compose runtime service images must be pinned to specific versions"
+    },
+    {
+      "code": "SC-014",
+      "category": "CI",
+      "severity": "error",
+      "weight": 10,
+      "scope": "repo",
+      "requirement": "A stack-level SBOM covering all compose-declared services must be produced per release"
+    },
+    {
+      "code": "SC-015",
+      "category": "CI",
+      "severity": "error",
+      "weight": 10,
+      "scope": "repo",
+      "requirement": "pecl install in Dockerfiles must pin exact extension versions"
+    },
+    {
+      "code": "SC-016",
+      "category": "CI",
+      "severity": "error",
+      "weight": 10,
+      "scope": "repo",
+      "requirement": "Third-party code must not be vendored undeclared"
     },
     {
       "code": "DEPLOY-001",
@@ -503,7 +527,7 @@
       "severity": "error",
       "weight": 10,
       "scope": "repo",
-      "requirement": "Container images must be signed with cosign after push"
+      "requirement": "Container images must be signed with cosign after push and carry their CycloneDX SBOM as a cosign attestation on the pushed digest"
     },
     {
       "code": "SC-005",

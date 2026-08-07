@@ -1,7 +1,7 @@
 # Conformance checker
 
 `check.py` scores a TYPO3 site/project repository against the **gold-standard
-conformance ruleset** — the deduped 73-rule catalogue in `rules.json`.
+conformance ruleset** — the deduped 76-rule catalogue in `rules.json`.
 
 ```bash
 python3 check.py /path/to/target-repo     # only pyyaml is required
@@ -14,7 +14,7 @@ Exit code is `0` iff **no repo-scope rule fails**. The gold template is kept at
 
 Every rule carries a `scope`:
 
-- **`repo`** (69 rules) — statically checkable against the repository tree. The
+- **`repo`** (72 rules) — statically checkable against the repository tree. The
   gold template must pass all of them; these form the scored denominator.
 - **`advisory`** (4 rules) — architectural / estate / runtime / shared-image
   properties that a single template repository cannot assert. They are reported
@@ -101,7 +101,7 @@ not a security boundary.
 
 ## Regenerating the ruleset
 
-`rules.json` is produced by `gen_rules.py`, which **embeds** the 73-rule
+`rules.json` is produced by `gen_rules.py`, which **embeds** the 76-rule
 catalogue inline as a pinned mirror of the published ruleset. Edit the catalogue
 in `gen_rules.py` and regenerate `rules.json`. (`typo3-14-gold` and
 `typo3-project-standard` track the same ruleset.) When the edit intentionally

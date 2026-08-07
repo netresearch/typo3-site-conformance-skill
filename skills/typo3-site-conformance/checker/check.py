@@ -160,6 +160,25 @@ class Ctx:
         except (FileNotFoundError, OSError, subprocess.SubprocessError):
             return None
 
+    def git_ls_files(self):
+        """All git-tracked paths, or None if git is unavailable (same contract
+        as git_tracked; SC-016 skips rather than walking the dirty tree)."""
+        cached = getattr(self, "_ls_files_cache", "unset")
+        if cached != "unset":
+            return cached
+        try:
+            r = subprocess.run(
+                ["git", "-C", str(self.root), "ls-files"],
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False,
+            )
+            self._ls_files_cache = r.stdout.splitlines() if r.returncode == 0 else None
+        except (FileNotFoundError, OSError, subprocess.SubprocessError):
+            self._ls_files_cache = None
+        return self._ls_files_cache
+
     def resolve_image(self, img: str) -> str:
         if not img:
             return ""
@@ -603,11 +622,20 @@ def c_sc002(x):
 
 
 def c_sc003(x):
-    return (
-        bool(re.search(r"cyclonedx|spdx|syft", x.pipeline_code))
-        and bool(re.search(r"cyclonedx|spdx|syft", _pipeline_jobs_text(x))),
-        "SBOM generation wired into a build job",
-    )
+    # Declared beats scanned: the BOM must be derived from committed lockfiles
+    # (sbom-toolbox or cyclonedx-php-composer). A scanner (syft/spdx output)
+    # alone is a completeness diff, not the SBOM.
+    declared = r"sbom-app|sbom-toolbox|cyclonedx[-_]?php[-_]?composer"
+    if re.search(declared, x.pipeline_code) and re.search(
+        declared, _pipeline_jobs_text(x)
+    ):
+        return (True, "declared lockfile-derived SBOM wired into a build job")
+    if re.search(r"cyclonedx|spdx|syft", x.pipeline_code):
+        return (
+            False,
+            "scanner-only SBOM (syft/spdx) — declared lockfile-derived BOM required",
+        )
+    return (False, "no SBOM generation in pipeline")
 
 
 def c_sc007(x):
@@ -713,6 +741,49 @@ def c_sc013(x):
         if not _is_first_party(m.group(1)):
             return (False, f"third-party :latest image ({m.group(1)})")
     return (True, "runtime images pinned (first-party :latest allowed)")
+
+
+def c_sc014(x):
+    sig = r"stack-sbom|sbom-stack|collect-stack-boms"
+    return (
+        bool(re.search(sig, x.pipeline_code))
+        and bool(re.search(sig, _pipeline_jobs_text(x))),
+        "stack-level SBOM produced per release",
+    )
+
+
+def c_sc015(x):
+    unpinned = []
+    for m in re.finditer(r"pecl\s+install\s+([^\n&|;]+)", x.dockerfile):
+        for pkg in m.group(1).split():
+            if pkg.startswith("-"):
+                continue
+            if not re.search(r"-[0-9][\w.]*$", pkg):
+                unpinned.append(pkg)
+    if unpinned:
+        return (False, f"unpinned pecl install: {', '.join(sorted(set(unpinned)))}")
+    return (True, "pecl installs pinned (or no pecl usage)")
+
+
+def c_sc016(x):
+    files = x.git_ls_files()
+    if files is None:
+        # No git available (e.g. exported tree). The on-disk tree also holds
+        # build artefacts (vendor/, node_modules/ from installs), so a
+        # filesystem walk would false-positive; skip rather than guess.
+        return (True, "vendoring check skipped (git unavailable)")
+    nm = [f for f in files if "node_modules/" in f]
+    if nm:
+        return (False, f"committed node_modules ({len(nm)} tracked files, e.g. {nm[0]})")
+    pat = re.compile(r"Resources/Public/.*(?:/vendor/|/libs/|\.min\.js$)")
+    vendored = [f for f in files if pat.search(f)]
+    if vendored and not any(f.endswith("sbom-vendored.cdx.json") for f in files):
+        return (
+            False,
+            f"vendored assets without sbom-vendored.cdx.json fragment "
+            f"({len(vendored)} tracked files, e.g. {vendored[0]})",
+        )
+    return (True, "no undeclared vendoring")
 
 
 def c_deploy002(x):
@@ -869,10 +940,16 @@ def c_dro011(x):
 
 
 def c_sc004(x):
-    return (
-        "cosign" in x.pipeline_code and "cosign" in _pipeline_jobs_text(x),
-        "cosign signing wired into a build job",
-    )
+    signed = "cosign" in x.pipeline_code and "cosign" in _pipeline_jobs_text(x)
+    attested = bool(re.search(r"sbom-attest|cosign\s+attest", x.pipeline_code))
+    if signed and attested:
+        return (True, "cosign signing + SBOM attestation wired into a build job")
+    if signed:
+        return (
+            False,
+            "cosign signing present but no SBOM attestation (cosign attest --type cyclonedx)",
+        )
+    return (False, "no cosign signing in pipeline")
 
 
 def c_sc005(x):
@@ -1014,6 +1091,9 @@ CHECKS = {
     "SC-011": c_sc011,
     "SC-012": c_sc012,
     "SC-013": c_sc013,
+    "SC-014": c_sc014,
+    "SC-015": c_sc015,
+    "SC-016": c_sc016,
     "DEPLOY-002": c_deploy002,
     "DRO-004": c_dro004,
     "DRO-005": c_dro005,
