@@ -1,6 +1,6 @@
 {
   "name": "typo3-site-conformance",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "description": "Source-of-truth conformance ruleset + self-contained checker for deployable TYPO3 v14 site/project repos (type:project + Docker/Compose): layout, containers, Concourse CI, supply-chain, secrets, Valkey/ofelia. The site/project counterpart to typo3-conformance.",
   "author": {
     "name": "Netresearch DTT GmbH",

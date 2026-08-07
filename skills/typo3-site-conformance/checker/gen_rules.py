@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate rules.json — the deduped 73-rule gold-standard conformance catalogue.
+"""Generate rules.json — the deduped 76-rule gold-standard conformance catalogue.
 
 Source of truth: the published conformance ruleset
 (https://pages.nrdev.de/typo3/typo3-project-standard → Conformance Ruleset).
@@ -29,8 +29,8 @@ import pathlib
 
 # Pinned mirror of the published ruleset — see module docstring (CONF-07).
 CATALOGUE_VERSION = "1.0.0"
-CATALOGUE_SNAPSHOT = "2026-06-09"
-CATALOGUE_SHA256 = "626d86c2cfee91850db779b0fc49f1d1446badfbe2f10c6847e82b18f773bccf"
+CATALOGUE_SNAPSHOT = "2026-08-07"
+CATALOGUE_SHA256 = "770143fb33b2c55a4399958c3ab44678112a8520fae9b34815f1a4e162a90847"
 
 # (code, category, severity, scope, requirement)
 RULES = [
@@ -281,7 +281,7 @@ RULES = [
         "CI",
         "error",
         "repo",
-        "SBOM must be generated for every production image build",
+        "SBOM must be declared (lockfile-derived, CycloneDX >= 1.6, lifecycles: build) for every production image build; scanner output alone does not satisfy this rule",
     ),
     (
         "SC-007",
@@ -331,6 +331,27 @@ RULES = [
         "warning",
         "repo",
         "Compose runtime service images must be pinned to specific versions",
+    ),
+    (
+        "SC-014",
+        "CI",
+        "error",
+        "repo",
+        "A stack-level SBOM covering all compose-declared services must be produced per release",
+    ),
+    (
+        "SC-015",
+        "CI",
+        "error",
+        "repo",
+        "pecl install in Dockerfiles must pin exact extension versions",
+    ),
+    (
+        "SC-016",
+        "CI",
+        "error",
+        "repo",
+        "Third-party code must not be vendored undeclared",
     ),
     # --- DEPLOY ---------------------------------------------------------------
     (
@@ -454,7 +475,7 @@ RULES = [
         "SEC",
         "error",
         "repo",
-        "Container images must be signed with cosign after push",
+        "Container images must be signed with cosign after push and carry their CycloneDX SBOM as a cosign attestation on the pushed digest",
     ),
     (
         "SC-005",
