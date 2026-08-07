@@ -774,14 +774,16 @@ def c_sc016(x):
         return (True, "vendoring check skipped (git unavailable)")
     nm = [f for f in files if "node_modules/" in f]
     if nm:
-        return (False, f"committed node_modules ({len(nm)} tracked files, e.g. {nm[0]})")
+        return (
+            False,
+            f"committed node_modules ({len(nm)} tracked files, e.g. {nm[0]})",
+        )
     pat = re.compile(r"Resources/Public/.*(?:/vendor/|/libs/|(?:\.min\.js$))")
     vendored = [f for f in files if pat.search(f)]
     if vendored and not any(f.endswith("sbom-vendored.cdx.json") for f in files):
         return (
             False,
-            f"vendored assets without sbom-vendored.cdx.json fragment "
-            f"({len(vendored)} tracked files, e.g. {vendored[0]})",
+            f"vendored assets without sbom-vendored.cdx.json fragment ({len(vendored)} tracked files, e.g. {vendored[0]})",
         )
     return (True, "no undeclared vendoring")
 
