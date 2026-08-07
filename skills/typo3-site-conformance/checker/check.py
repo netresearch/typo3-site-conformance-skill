@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Gold-standard TYPO3 v14 conformance checker.
 
-Scores a site project against the deduped 73-rule ruleset (rules.json). The gold
+Scores a site project against the deduped 76-rule ruleset (rules.json). The gold
 template must score 100 % on every *repo*-scope rule; *advisory*-scope rules
 (architecture / estate / runtime / base-image) are reported but not scored.
 
