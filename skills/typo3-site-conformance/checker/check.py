@@ -175,7 +175,7 @@ class Ctx:
                 check=False,
             )
             self._ls_files_cache = r.stdout.splitlines() if r.returncode == 0 else None
-        except (FileNotFoundError, OSError, subprocess.SubprocessError):
+        except (OSError, subprocess.SubprocessError):
             self._ls_files_cache = None
         return self._ls_files_cache
 
@@ -758,7 +758,7 @@ def c_sc015(x):
         for pkg in m.group(1).split():
             if pkg.startswith("-"):
                 continue
-            if not re.search(r"-[0-9][\w.]*$", pkg):
+            if not re.search(r"-\d[\w.]*$", pkg):
                 unpinned.append(pkg)
     if unpinned:
         return (False, f"unpinned pecl install: {', '.join(sorted(set(unpinned)))}")
@@ -775,7 +775,7 @@ def c_sc016(x):
     nm = [f for f in files if "node_modules/" in f]
     if nm:
         return (False, f"committed node_modules ({len(nm)} tracked files, e.g. {nm[0]})")
-    pat = re.compile(r"Resources/Public/.*(?:/vendor/|/libs/|\.min\.js$)")
+    pat = re.compile(r"Resources/Public/.*(?:/vendor/|/libs/|(?:\.min\.js$))")
     vendored = [f for f in files if pat.search(f)]
     if vendored and not any(f.endswith("sbom-vendored.cdx.json") for f in files):
         return (
