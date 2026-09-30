@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# /// script
+# dependencies = ["PyYAML>=6"]
+# ///
 """Gold-standard TYPO3 v14 conformance checker.
 
 Scores a site project against the deduped 76-rule ruleset (rules.json). The gold

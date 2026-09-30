@@ -5,7 +5,12 @@ conformance ruleset** — the deduped 76-rule catalogue in `rules.json`.
 
 ```bash
 python3 check.py /path/to/target-repo     # only pyyaml is required
+uv run check.py /path/to/target-repo      # installs PyYAML from the script metadata
 ```
+
+`check.py` declares its one third-party dependency, PyYAML, in an inline
+script metadata block (PEP 723) at the top of the file, so `uv run` can start
+it from a clean environment.
 
 Exit code is `0` iff **no repo-scope rule fails**. The gold template is kept at
 **100 %**.
