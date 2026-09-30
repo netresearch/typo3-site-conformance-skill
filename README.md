@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-SA-4.0 -->
+<!-- SPDX-FileCopyrightText: Netresearch DTT GmbH -->
 # TYPO3 Site / Project Conformance Skill
 
 Conformance and hardening for **deployable TYPO3 v14 site/project repositories**

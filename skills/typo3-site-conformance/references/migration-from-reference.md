@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-SA-4.0 -->
+<!-- SPDX-FileCopyrightText: Netresearch DTT GmbH -->
 # Migrating a legacy site repo to gold conformance
 
 Transforming a `support/typo3-NN/app`-style repo (the de-facto pattern) into a

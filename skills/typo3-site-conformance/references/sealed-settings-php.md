@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-SA-4.0 -->
+<!-- SPDX-FileCopyrightText: Netresearch DTT GmbH -->
 # Operating a sealed (read-only) settings.php
 
 The gold standard keeps `config/system/settings.php` committed, secret-free and

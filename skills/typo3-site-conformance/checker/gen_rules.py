@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 """Generate rules.json — the deduped 76-rule gold-standard conformance catalogue.
 
 Source of truth: the published conformance ruleset
