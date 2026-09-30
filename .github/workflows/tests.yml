@@ -1,0 +1,29 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
+name: Skill Tests
+
+# Runs tests/test_check.py, the behaviour tests for the bundled checker
+# (skills/typo3-site-conformance/checker/check.py and gen_rules.py), through
+# the skill-repo-skill tests reusable. The reusable runs each matched file with
+# the runner's python3 and fails the job when one exits non-zero. The suite
+# needs PyYAML, the checker's only third-party dependency, and fails with an
+# error annotation when that python3 cannot import it.
+#
+# The reusable's require_tests input is not set: it only looks at
+# skills/*/scripts/, which this repository does not have (the checker lives
+# under skills/*/checker/), so it could never fire here.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions: {}
+
+jobs:
+  tests:
+    uses: netresearch/skill-repo-skill/.github/workflows/tests.yml@main
+    permissions:
+      contents: read
+    with:
+      python_glob: "tests/*.py"
