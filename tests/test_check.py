@@ -862,6 +862,17 @@ class EdgeCaseTest(_TempRepo):
             check.c_sc015(self.ctx(mutate)), (False, "unpinned pecl install: apcu")
         )
 
+    def test_non_utf8_bytes_do_not_stop_the_run(self) -> None:
+        def post(root: pathlib.Path) -> None:
+            for rel in ("Dockerfile", "ci/pipeline.yml", "compose.yaml"):
+                with (root / rel).open("ab") as fh:
+                    fh.write(b"# caf\xe9\n")
+
+        root = self.repo(None, post)
+        r = self.run_cli(root)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("100%", r.stdout)
+
     def test_empty_directory_scores_without_crashing(self) -> None:
         r = self.run_cli(self.root)
         self.assertEqual(r.returncode, 1, r.stderr)

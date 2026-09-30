@@ -102,14 +102,16 @@ class Ctx:
 
     def _text(self, rel: str, base: str = "root") -> str:
         p = self._base(base) / rel
-        return p.read_text(encoding="utf-8") if p.is_file() else ""
+        return p.read_text(encoding="utf-8", errors="replace") if p.is_file() else ""
 
     def _yaml(self, rel: str, loader=yaml.SafeLoader):
         p = self.root / rel
         if not p.is_file():
             return None
         try:
-            return yaml.load(p.read_text(encoding="utf-8"), Loader=loader)
+            return yaml.load(
+                p.read_text(encoding="utf-8", errors="replace"), Loader=loader
+            )
         except yaml.YAMLError:
             return None
 
@@ -118,7 +120,7 @@ class Ctx:
         if not p.is_file():
             return None
         try:
-            return json.loads(p.read_text(encoding="utf-8"))
+            return json.loads(p.read_text(encoding="utf-8", errors="replace"))
         except json.JSONDecodeError:
             return None
 
@@ -139,7 +141,9 @@ class Ctx:
         ci = self.root / "ci"
         if ci.is_dir():
             for p in ci.rglob("*.yml"):
-                out[str(p.relative_to(self.root))] = p.read_text(encoding="utf-8")
+                out[str(p.relative_to(self.root))] = p.read_text(
+                    encoding="utf-8", errors="replace"
+                )
         return out
 
     # ---- helpers ----
