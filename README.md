@@ -173,6 +173,7 @@ Checks that run on pull requests in this repository:
   yamllint, actionlint, JSON syntax, ShellCheck at severity `style`, ruff check
   and ruff format, checkpoint schema.
 - Eval Validation (`eval-validate.yml`) and Skill Tests (`tests.yml`).
+- DCO: every commit carries a `Signed-off-by` trailer.
 - CodeQL default setup (a repository setting, not a workflow file) analyses
   the GitHub Actions workflows and the Python code with the extended query
   suite.

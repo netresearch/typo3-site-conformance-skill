@@ -26,7 +26,7 @@ This document states what users of the typo3-site-conformance skill can and cann
 
 - **User**: chooses the repository to assess and runs the checker, or asks an agent to. Trusted.
 - **AI agent**: loads `SKILL.md` and the references, runs the checker and, when asked to harden a repository, edits it (SKILL.md, Workflow steps 2 and 4). It acts with the user's permissions and the tools the user's agent platform grants.
-- **Target repository**: input for the checker. Its files are data.
+- **Target repository**: input for the checker. `check.py` parses its files as text, YAML or JSON and asks `git` which of them are tracked.
 - **Maintainers and CI**: change and release this repository.
 
 Boundary 1 lies between the checker and the target repository: file content is parsed as text, YAML or JSON and matched with regular expressions. Boundary 2 lies between this repository and the user's machine: releases are built and signed in CI.

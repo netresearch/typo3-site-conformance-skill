@@ -21,7 +21,7 @@ This repository ships one agent skill, `typo3-site-conformance`, with a bundled 
 
 - **User**: asks an agent to assess a TYPO3 site repository, or runs `check.py` directly.
 - **AI agent**: loads `SKILL.md` and the references, runs `python3 checker/check.py <repo>` (SKILL.md, Workflow step 2) and, when asked to harden the repository, changes it and scores it again (step 4).
-- **Target repository**: the TYPO3 site or project repository under review. The checker only reads it.
+- **Target repository**: the TYPO3 site or project repository under review. `check.py` parses its files as text, YAML or JSON and asks `git` which of them are tracked.
 - **Maintainers and CI**: edit the catalogue in `gen_rules.py`, regenerate `rules.json`, and release the skill.
 
 ## Checker data flow
