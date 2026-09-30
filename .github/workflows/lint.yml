@@ -12,3 +12,8 @@ jobs:
   validate:
     name: Skill Validation
     uses: netresearch/skill-repo-skill/.github/workflows/validate.yml@main
+    with:
+      # Strictest level. The repository has no shell scripts today, so the
+      # step reports "No shell scripts found"; a script added later is held
+      # to every ShellCheck diagnostic, not only errors.
+      shellcheck-severity: style
