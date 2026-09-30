@@ -5,7 +5,8 @@ Scores a site project against the deduped 76-rule ruleset (rules.json). The gold
 template must score 100 % on every *repo*-scope rule; *advisory*-scope rules
 (architecture / estate / runtime / base-image) are reported but not scored.
 
-Usage:  python3 tools/conformance/check.py [PROJECT_ROOT]
+Usage:  python3 skills/typo3-site-conformance/checker/check.py [PROJECT_ROOT]
+        (PROJECT_ROOT defaults to the current directory)
 Exit 0 iff no repo-scope rule fails.
 """
 
