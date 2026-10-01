@@ -20,7 +20,7 @@ This document states what users of the typo3-site-conformance skill can and cann
 1. `check.py` treats the target repository as data. It installs nothing, writes no file, opens no network connection and does not evaluate target file content as code.
 2. The rule catalogue a user runs is the reviewed catalogue: `rules.json` matches `gen_rules.py`, and `gen_rules.py` matches its pinned hash.
 3. The skill and its releases are delivered unmodified from this repository.
-4. Changes reach `main` only through the checks listed in [README.md](../README.md#governance-and-policies).
+4. Changes to `main` are proposed as pull requests, on which the checks listed in [README.md](../README.md#governance-and-policies) run. Branch protection of `main` requires a subset of them and does not bind administrators.
 
 ## Actors and trust boundaries
 
@@ -36,7 +36,7 @@ Boundary 1 lies between the checker and the target repository: file content is p
 ### 1. The checker treats the target as data
 
 - `check.py` reads files with `pathlib.Path.read_text` and `os.walk`; it has no call that writes a file, and it imports no network module (`json`, `os`, `pathlib`, `re`, `subprocess`, `sys`, `yaml`).
-- YAML is loaded with `_Loader`, a subclass of `yaml.SafeLoader` that maps every unknown tag to `None` (`check.py`, `_Loader`), so a document cannot construct Python objects. A YAML or JSON syntax error makes the file count as absent instead of stopping the run; undecodable bytes are replaced.
+- YAML is loaded with `yaml.SafeLoader` (`compose.yaml`) or with `_Loader`, a subclass that maps every unknown tag to `None` (`compose.override.yaml`, `ci/pipeline.yml`; `check.py`, `_Loader`), so a document cannot construct Python objects. A YAML or JSON syntax error makes the file count as absent instead of stopping the run; undecodable bytes are replaced.
 - The only external program is `git`, started with an argument list and no shell: `git -C <root> ls-files` and `git -C <root> ls-files --error-unmatch .env`, each with a timeout (`Ctx.git_tracked`, `Ctx.git_ls_files`).
 - The result is a report on standard output and the exit code; `tests/test_check.py` runs the command line against a fixture repository and asserts both.
 
@@ -50,7 +50,7 @@ Boundary 1 lies between the checker and the target repository: file content is p
 - Releases are built by `.github/workflows/release.yml`, which calls the `netresearch/skill-repo-skill` release workflow with `id-token: write` and `attestations: write`. That workflow signs `SHA256SUMS.txt` keyless with `cosign sign-blob` and attests the release archives and checksums with `actions/attest-build-provenance`.
 - The Skill Validation job checks that `plugin.json` and `.claude-plugin/plugin.json` agree and that the `SKILL.md` version matches the plugin version.
 
-### 4. Changes pass automated checks
+### 4. Pull requests run automated checks
 
 `lint.yml`, `eval-validate.yml` and `tests.yml` grant `contents: read` only. `auto-merge-deps.yml` runs on `pull_request_target` and calls the shared workflow in `netresearch/.github`, which contains no checkout step and runs no pull request code; this repository passes it no secrets. The checks themselves are listed in [README.md](../README.md#governance-and-policies).
 
@@ -58,7 +58,7 @@ Boundary 1 lies between the checker and the target repository: file content is p
 
 | Weakness | Where it could arise | Countermeasure |
 |----------|---------------------|----------------|
-| CWE-502 deserialization of untrusted data | YAML in the target repository | `yaml.SafeLoader` subclass; unknown tags become `None` (`check.py`, `_Loader`). |
+| CWE-502 deserialization of untrusted data | YAML in the target repository | `yaml.SafeLoader`, or its subclass `_Loader` in which unknown tags become `None` (`check.py`). |
 | CWE-78 OS command injection | Target path and file names | `git` is started with an argument list, no shell; no command string is built from input (`check.py`, `Ctx.git_tracked`, `Ctx.git_ls_files`). |
 | CWE-94 code injection | PHP, YAML and Dockerfile content of the target | Content is matched with regular expressions and parsed as data; the checker does not `eval`, `exec` or import anything from the target. |
 | CWE-1104 unmaintained third-party components | PyYAML, GitHub Actions | PyYAML, the only third-party Python dependency, is declared in `check.py`'s PEP 723 block and resolved by the user's installer; the shared workflows this repository calls pin third-party actions by commit SHA. |

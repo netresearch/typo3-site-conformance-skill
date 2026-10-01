@@ -129,8 +129,9 @@ workflow, with the runner's `python3`.
 
 - **Runtime:** the checker needs Python 3 and PyYAML, declared in the PEP 723
   block at the top of `check.py`; `uv run check.py <repo>` installs it. `git`
-  is used when present (without it, the tracked-`.env` rules fall back to the
-  `.gitignore` text and the vendoring rule SC-016 is skipped). `gen_rules.py`
+  is used when present (without it, DRO-011 relies on the `.gitignore` text
+  alone, STRUCT-006 skips its tracked-`.env` test and the vendoring rule SC-016
+  is skipped). `gen_rules.py`
   and the tests use the standard library, plus PyYAML for the tests.
 - **Composer:** `composer.json` requires
   `netresearch/composer-agent-skill-plugin`, which installs the skill into a
@@ -177,6 +178,10 @@ Checks that run on pull requests in this repository:
 - CodeQL default setup (a repository setting, not a workflow file) analyses
   the GitHub Actions workflows and the Python code with the extended query
   suite.
+- SonarCloud analysis, the CodeRabbit review and the Copilot code review that
+  the repository ruleset requests (configured outside the workflows).
+- Auto-merge dependency PRs (`auto-merge-deps.yml`), which acts only on
+  Renovate and Dependabot pull requests.
 - No workflow here runs dependency review, a dependency audit, Opengrep or
   Betterleaks. Secret detection is GitHub secret scanning with push
   protection, which is enabled for this repository.
