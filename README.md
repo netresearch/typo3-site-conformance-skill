@@ -178,8 +178,9 @@ Checks that run on pull requests in this repository:
 - CodeQL default setup (a repository setting, not a workflow file) analyses
   the GitHub Actions workflows and the Python code with the extended query
   suite.
-- SonarCloud analysis, the CodeRabbit review and the Copilot code review that
-  the repository ruleset requests (configured outside the workflows).
+- SonarCloud analysis (configured outside the workflows); on pull requests to
+  `main` that are not drafts, also the CodeRabbit review and the Copilot code
+  review that the repository ruleset requests.
 - Auto-merge dependency PRs (`auto-merge-deps.yml`), which acts only on
   Renovate and Dependabot pull requests.
 - No workflow here runs dependency review, a dependency audit, Opengrep or

@@ -9,8 +9,8 @@ name: Skill Tests
 # needs PyYAML, the checker's only third-party dependency, and fails with an
 # error annotation when that python3 cannot import it.
 #
-# require_tests: the reusable counts the files under skills/*/checker/ as
-# shipped scripts and fails the job when they ship but no test file ran.
+# require_tests: the reusable counts the script files under skills/*/checker/
+# (check.py, gen_rules.py) as shipped scripts and fails the job when they ship but no test file ran.
 
 on:
   push:

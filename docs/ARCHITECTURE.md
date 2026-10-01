@@ -29,7 +29,7 @@ This repository ships one agent skill, `typo3-site-conformance`, with a bundled 
 ```mermaid
 flowchart LR
     R[rules.json] --> M[main]
-    T[(target repository)] --> C[Ctx: load files once]
+    T[(target repository)] --> C[Ctx: load inputs]
     G[git ls-files] --> C
     C --> K[CHECKS: one function per repo-scope rule]
     M --> K
@@ -39,7 +39,7 @@ flowchart LR
 ```
 
 1. **Input.** `main()` takes the target path from the first argument (default `.`) and reads `rules.json` from the checker's own directory.
-2. **Loading.** `Ctx.__init__` loads these inputs eagerly; some are read again later (for example `ci/pipeline.yml` by the CI text collection, and Compose files and `.env.dist` by individual checks). The Composer project root is `app/` when `app/composer.json` exists, else the repository root. From the project root it reads `composer.json`, `config/system/settings.php` and `config/system/additional.php`; from the repository root `compose.yaml`, `compose.override.yaml`, `Dockerfile`, `.gitlab-ci.yml`, `ci/pipeline.yml` (as text, comment-stripped text and parsed YAML), every `ci/**/*.yml`, `.gitignore` and `.env.dist` (parsed into variables with `${VAR:-default}` expansion). YAML is parsed with `yaml.SafeLoader`; `compose.override.yaml` and `ci/pipeline.yml` use a `SafeLoader` subclass that turns unknown tags such as `!reset` into `null`. Unreadable YAML or JSON counts as absent, so an unknown tag in `compose.yaml` makes that file count as absent. Files are decoded as UTF-8 with undecodable bytes replaced.
+2. **Loading.** `Ctx.__init__` loads these inputs eagerly; some are read again later (for example `ci/pipeline.yml` by the CI text collection, and `compose.yaml` and `.env.dist` by individual checks). The Composer project root is `app/` when `app/composer.json` exists, else the repository root. From the project root it reads `composer.json`, `config/system/settings.php` and `config/system/additional.php`; from the repository root `compose.yaml`, `compose.override.yaml`, `Dockerfile`, `.gitlab-ci.yml`, `ci/pipeline.yml` (as text, comment-stripped text and parsed YAML), every `ci/**/*.yml`, `.gitignore` and `.env.dist` (parsed into variables with `${VAR:-default}` expansion). YAML is parsed with `yaml.SafeLoader`; `compose.override.yaml` and `ci/pipeline.yml` use a `SafeLoader` subclass that turns unknown tags such as `!reset` into `null`. Unreadable YAML or JSON counts as absent, so an unknown tag in `compose.yaml` makes that file count as absent. Files are decoded as UTF-8 with undecodable bytes replaced.
 3. **On-demand reads.** Individual checks read `ofelia/config.ini`, `README.md`, the `CLAUDE.md` symlink and `config/sites/*/config.yaml`, test for paths such as `build/`, `ansible/` and `docker-compose.yml`, walk the tree for live environment file names (skipping `.git`), and ask `git` whether `.env` is tracked and which files are tracked (`git -C <root> ls-files`). Without `git`, DRO-011 relies on the `.gitignore` text alone, STRUCT-006 skips its tracked-`.env` test, and the vendoring check (SC-016) is skipped.
 4. **Evaluation.** For every rule in `rules.json`, an `advisory` rule is reported with its note from `ADVISORY_NOTE`; a `repo` rule runs its function from `CHECKS`, which returns a pass flag and a detail string.
 5. **Scoring.** Weights come from `rules.json` (error 10, warning 5, info 1). The score is `round(100 × (max − penalty) / max)` over the repo-scope rules.
