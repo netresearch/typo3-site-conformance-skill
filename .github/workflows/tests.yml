@@ -9,9 +9,8 @@ name: Skill Tests
 # needs PyYAML, the checker's only third-party dependency, and fails with an
 # error annotation when that python3 cannot import it.
 #
-# The reusable's require_tests input is not set: it only looks at
-# skills/*/scripts/, which this repository does not have (the checker lives
-# under skills/*/checker/), so it could never fire here.
+# require_tests: the reusable counts the files under skills/*/checker/ as
+# shipped scripts and fails the job when they ship but no test file ran.
 
 on:
   push:
@@ -27,3 +26,4 @@ jobs:
       contents: read
     with:
       python_glob: "tests/*.py"
+      require_tests: true
