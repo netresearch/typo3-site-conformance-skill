@@ -71,3 +71,4 @@ Boundary 1 lies between the checker and the target repository: file content is p
 - **Changes the agent makes.** Hardening a repository means the agent edits it with the user's permissions. Review the changes before committing them.
 - **`allowed-tools`.** `SKILL.md` declares none. Where a skill declares `allowed-tools`, it only pre-approves tools; it does not remove tools the agent already has.
 - **Arguments.** The checker trusts its argument; it is meant to be the path of a repository the user chose to assess.
+- **Release archives.** The shared release workflow copies a skill's `SKILL.md`, `references`, `scripts`, `assets`, `templates`, `examples` and `checkpoints.yaml`, not `checker/`, so the release archives do not contain the checker (netresearch/skill-repo-skill#368). Installing from this repository or the marketplace includes it.
