@@ -1,4 +1,6 @@
 ---
+# SPDX-License-Identifier: CC-BY-SA-4.0
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 name: typo3-site-conformance
 description: "Use when assessing or hardening a deployable TYPO3 SITE/PROJECT repo (composer type:project + Docker/Compose) — not an extension. Triggers on: compose.yaml/docker-compose.yml + config/sites or config/system in a TYPO3 repo, site conformance, gold standard, project conformance, container/Compose topology, Concourse pipeline review, supply-chain (Trivy/SBOM/cosign), secret-free settings.php/additional.php, Valkey cache, ofelia scheduler, image digest pinning, .gitlab-ci validate-only. For EXTENSION quality use typo3-conformance instead."
 metadata:

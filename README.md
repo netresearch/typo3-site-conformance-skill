@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-SA-4.0 -->
+<!-- SPDX-FileCopyrightText: Netresearch DTT GmbH -->
 # TYPO3 Site / Project Conformance Skill
 
 Conformance and hardening for **deployable TYPO3 v14 site/project repositories**
@@ -86,7 +88,104 @@ Add the Netresearch marketplace and install the plugin:
 
 Issues and PRs welcome. To change a rule, edit the catalogue in
 `skills/typo3-site-conformance/checker/gen_rules.py` and regenerate `rules.json`.
-Run `bash validate-skill.sh .` (from `skill-repo-skill`) before opening a PR.
+Run `bash validate-skill.sh .` (from `skill-repo-skill`) and the tests below
+before opening a PR. A change to `check.py` or `gen_rules.py` comes with a test
+in `tests/test_check.py` that fails without it: for a new or changed rule, add
+its mutation to `MUTATIONS` and keep the gold fixture passing.
+
+The components and the checker's data flow are described in
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+
+### Tests
+
+```bash
+python3 tests/test_check.py        # needs Python 3 and PyYAML; exit 0 = all passed
+```
+
+`tests/test_check.py` is a standard-library `unittest` suite. It builds a
+"gold" fixture repository in a temporary directory (with `git`) and checks
+that:
+
+- every repo-scope rule passes on the fixture, and `check.py` exits 0 with a
+  100 % score;
+- one mutation per rule makes that rule fail, and `check.py` exits 1 and names
+  it;
+- the refinements in `checker/README.md` hold (app/ layout, job services,
+  comment-only keywords, unreferenced anchors, tracked `.env`, vendored
+  assets, malformed pipelines, non-UTF-8 files);
+- the helpers (image pinning, secret detection, placeholder expansion) behave
+  as documented;
+- `rules.json` is what `gen_rules.py` generates and matches its pinned hash.
+
+A failure names the test and, for a mutation, the rule code and the detail the
+check returned (`SC-002 still passes: …`). The skill instructions and
+references are text and are covered by the validators, not by these tests.
+
+CI runs the suite in `.github/workflows/tests.yml` (Skill Tests) on every pull
+request and every push to `main`, through the `skill-repo-skill` tests
+workflow, with the runner's `python3`.
+
+## Dependencies
+
+- **Runtime:** the checker needs Python 3 and PyYAML, declared in the PEP 723
+  block at the top of `check.py`; `uv run check.py <repo>` installs it. `git`
+  is used when present (without it, DRO-011 relies on the `.gitignore` text
+  alone, STRUCT-006 skips its tracked-`.env` test and the vendoring rule SC-016
+  is skipped). `gen_rules.py`
+  and the tests use the standard library, plus PyYAML for the tests.
+- **Composer:** `composer.json` requires
+  `netresearch/composer-agent-skill-plugin`, which installs the skill into a
+  Composer project. There is no lock file; the package is consumed as a
+  library.
+- **CI:** the workflows call shared workflows in `netresearch/skill-repo-skill`
+  and `netresearch/.github` by `@main`; those pin third-party actions by commit
+  SHA and tools (ruff, ShellCheck, PyYAML) by version.
+- **Updates:** Renovate (`renovate.json`, `config:recommended`) opens update
+  pull requests; Dependabot security updates are enabled for the repository.
+  `auto-merge-deps.yml` approves and enables auto-merge for pull requests
+  opened by `renovate[bot]` or `dependabot[bot]` without the `deps-major` or
+  `deps-no-automerge` label. A new dependency is added only when the standard
+  library cannot do the job, and is declared where its consumer reads it (the
+  PEP 723 block for the checker, `composer.json` for Composer).
+
+## Governance and policies
+
+This repository follows the Netresearch organisation policies:
+
+- [Governance](https://github.com/netresearch/.github/blob/main/GOVERNANCE.md):
+  ownership, roles, and how decisions are made and disputes resolved.
+- [Roadmap](https://github.com/netresearch/.github/blob/main/ROADMAP.md):
+  planned and explicitly excluded work for the coming year.
+- [Handling of dependency and code analysis findings](https://github.com/netresearch/.github/blob/main/SECURITY.md#handling-of-dependency-and-code-analysis-findings):
+  thresholds, deadlines and the exception process for dependency (SCA) and
+  static analysis (SAST) findings.
+- [Secret management](https://github.com/netresearch/.github/blob/main/SECURITY.md#secret-management):
+  how CI and release credentials are stored, accessed and rotated.
+- [Access roster](https://github.com/netresearch/.github/blob/main/docs/access-roster.md):
+  who holds administrative access to this repository and the organisation.
+
+The security assurance case for this skill (threat model, trust boundaries,
+countermeasures and limits) is in
+[`docs/SECURITY-ASSURANCE.md`](docs/SECURITY-ASSURANCE.md).
+
+Checks that run on pull requests in this repository:
+
+- Skill Validation (`lint.yml`): skill structure, manifest sync, markdownlint,
+  yamllint, actionlint, JSON syntax, ShellCheck at severity `style`, ruff check
+  and ruff format, checkpoint schema.
+- Eval Validation (`eval-validate.yml`) and Skill Tests (`tests.yml`).
+- DCO: every commit carries a `Signed-off-by` trailer.
+- CodeQL default setup (a repository setting, not a workflow file) analyses
+  the GitHub Actions workflows and the Python code with the extended query
+  suite.
+- SonarCloud analysis (configured outside the workflows); on pull requests to
+  `main` that are not drafts, also the CodeRabbit review and the Copilot code
+  review that the repository ruleset requests.
+- Auto-merge dependency PRs (`auto-merge-deps.yml`), which acts only on
+  Renovate and Dependabot pull requests.
+- No workflow here runs dependency review, a dependency audit, Opengrep or
+  Betterleaks. Secret detection is GitHub secret scanning with push
+  protection, which is enabled for this repository.
 
 ## License
 

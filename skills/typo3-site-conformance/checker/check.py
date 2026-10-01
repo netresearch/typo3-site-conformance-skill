@@ -1,11 +1,17 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
+# /// script
+# dependencies = ["PyYAML>=6"]
+# ///
 """Gold-standard TYPO3 v14 conformance checker.
 
 Scores a site project against the deduped 76-rule ruleset (rules.json). The gold
 template must score 100 % on every *repo*-scope rule; *advisory*-scope rules
 (architecture / estate / runtime / base-image) are reported but not scored.
 
-Usage:  python3 tools/conformance/check.py [PROJECT_ROOT]
+Usage:  python3 skills/typo3-site-conformance/checker/check.py [PROJECT_ROOT]
+        (PROJECT_ROOT defaults to the current directory)
 Exit 0 iff no repo-scope rule fails.
 """
 
@@ -96,14 +102,16 @@ class Ctx:
 
     def _text(self, rel: str, base: str = "root") -> str:
         p = self._base(base) / rel
-        return p.read_text(encoding="utf-8") if p.is_file() else ""
+        return p.read_text(encoding="utf-8", errors="replace") if p.is_file() else ""
 
     def _yaml(self, rel: str, loader=yaml.SafeLoader):
         p = self.root / rel
         if not p.is_file():
             return None
         try:
-            return yaml.load(p.read_text(encoding="utf-8"), Loader=loader)
+            return yaml.load(
+                p.read_text(encoding="utf-8", errors="replace"), Loader=loader
+            )
         except yaml.YAMLError:
             return None
 
@@ -112,7 +120,7 @@ class Ctx:
         if not p.is_file():
             return None
         try:
-            return json.loads(p.read_text(encoding="utf-8"))
+            return json.loads(p.read_text(encoding="utf-8", errors="replace"))
         except json.JSONDecodeError:
             return None
 
@@ -133,7 +141,9 @@ class Ctx:
         ci = self.root / "ci"
         if ci.is_dir():
             for p in ci.rglob("*.yml"):
-                out[str(p.relative_to(self.root))] = p.read_text(encoding="utf-8")
+                out[str(p.relative_to(self.root))] = p.read_text(
+                    encoding="utf-8", errors="replace"
+                )
         return out
 
     # ---- helpers ----

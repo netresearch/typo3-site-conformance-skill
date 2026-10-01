@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-SA-4.0 -->
+<!-- SPDX-FileCopyrightText: Netresearch DTT GmbH -->
 # Database seeds with fixed uids
 
 Demo and project repos often ship a `data/*.sql` seed that creates pages and
