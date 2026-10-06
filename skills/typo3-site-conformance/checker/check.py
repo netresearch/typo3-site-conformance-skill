@@ -38,21 +38,31 @@ _Loader.add_multi_constructor("!", lambda loader, suffix, node: None)
 
 # An alias reuses its anchor's node, so a document of nested aliases is small
 # on disk and huge when walked as a tree (json.dumps in _pipeline_jobs_text
-# does). The largest compose and Concourse files measured expand to about
-# 1,100 nodes; a document above this budget is treated like a malformed one.
+# does). Two budgets bound that walk: the number of nodes, and the length of
+# the strings counted once per occurrence (one long string referenced many
+# times). The largest compose and Concourse files measured expand to about
+# 1,500 nodes; a document above either budget is treated like a malformed one.
 _YAML_NODE_BUDGET = 100_000
+_YAML_TEXT_BUDGET = 10_000_000
 
 
-def _within_node_budget(data, budget: int = _YAML_NODE_BUDGET) -> bool:
-    """True when `data`, walked as a tree, has at most `budget` nodes. Stops
-    counting at the budget, so a recursive alias ends here too."""
-    stack, seen = [data], 0
+def _within_node_budget(
+    data, budget: int = _YAML_NODE_BUDGET, text_budget: int = _YAML_TEXT_BUDGET
+) -> bool:
+    """True when `data`, walked as a tree, has at most `budget` nodes and at
+    most `text_budget` characters of strings. Stops counting at a budget, so a
+    recursive alias ends here too."""
+    stack, seen, text = [data], 0, 0
     while stack:
         item = stack.pop()
         seen += 1
         if seen > budget:
             return False
-        if isinstance(item, dict):
+        if isinstance(item, str):
+            text += len(item)
+            if text > text_budget:
+                return False
+        elif isinstance(item, dict):
             stack.extend(item.keys())
             stack.extend(item.values())
         elif isinstance(item, (list, tuple)):
@@ -63,11 +73,32 @@ def _within_node_budget(data, budget: int = _YAML_NODE_BUDGET) -> bool:
 # Text from the checked repository (its directory name, service names) is
 # printed in the report. C0/C1 control characters and the bidirectional
 # formatting characters are replaced, so that text cannot drive the terminal.
-_UNPRINTABLE = re.compile("[\x00-\x1f\x7f-\x9f\u200e\u200f\u202a-\u202e\u2066-\u2069]")
+_UNPRINTABLE = re.compile(
+    "[\x00-\x1f\x7f-\x9f\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]"
+)
 
 
 def _printable(text) -> str:
     return _UNPRINTABLE.sub("?", str(text))
+
+
+# Variables that point git at another repository or index; a checker started
+# from a git hook inherits them for the calling repository.
+_GIT_LOCATION_VARS = (
+    "GIT_DIR",
+    "GIT_WORK_TREE",
+    "GIT_INDEX_FILE",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+    "GIT_COMMON_DIR",
+    "GIT_NAMESPACE",
+)
+
+
+def _git_env() -> dict[str, str]:
+    env = {k: v for k, v in os.environ.items() if k not in _GIT_LOCATION_VARS}
+    env["GIT_CONFIG_NOSYSTEM"] = "1"
+    return env
 
 
 def _project_git(root: pathlib.Path, *args: str, timeout: int):
@@ -89,7 +120,7 @@ def _project_git(root: pathlib.Path, *args: str, timeout: int):
         text=True,
         timeout=timeout,
         check=False,
-        env={**os.environ, "GIT_CONFIG_NOSYSTEM": "1"},
+        env=_git_env(),
     )
 
 
