@@ -36,6 +36,93 @@ class _Loader(yaml.SafeLoader):
 
 _Loader.add_multi_constructor("!", lambda loader, suffix, node: None)
 
+# An alias reuses its anchor's node, so a document of nested aliases is small
+# on disk and huge when walked as a tree (json.dumps in _pipeline_jobs_text
+# does). Two budgets bound that walk: the number of nodes, and the length of
+# the strings counted once per occurrence (one long string referenced many
+# times). The largest compose and Concourse files measured expand to about
+# 1,500 nodes; a document above either budget is treated like a malformed one.
+_YAML_NODE_BUDGET = 100_000
+_YAML_TEXT_BUDGET = 10_000_000
+
+
+def _within_node_budget(
+    data, budget: int = _YAML_NODE_BUDGET, text_budget: int = _YAML_TEXT_BUDGET
+) -> bool:
+    """True when `data`, walked as a tree, has at most `budget` nodes and at
+    most `text_budget` characters of strings. Stops counting at a budget, so a
+    recursive alias ends here too."""
+    stack, seen, text = [data], 0, 0
+    while stack:
+        item = stack.pop()
+        seen += 1
+        if seen > budget:
+            return False
+        if isinstance(item, str):
+            text += len(item)
+            if text > text_budget:
+                return False
+        elif isinstance(item, dict):
+            stack.extend(item.keys())
+            stack.extend(item.values())
+        elif isinstance(item, (list, tuple)):
+            stack.extend(item)
+    return True
+
+
+# Text from the checked repository (its directory name, service names) is
+# printed in the report. C0/C1 control characters and the bidirectional
+# formatting characters are replaced, so that text cannot drive the terminal.
+_UNPRINTABLE = re.compile(
+    "[\x00-\x1f\x7f-\x9f\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]"
+)
+
+
+def _printable(text) -> str:
+    return _UNPRINTABLE.sub("?", str(text))
+
+
+# Variables that point git at another repository or index; a checker started
+# from a git hook inherits them for the calling repository.
+_GIT_LOCATION_VARS = (
+    "GIT_DIR",
+    "GIT_WORK_TREE",
+    "GIT_INDEX_FILE",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+    "GIT_COMMON_DIR",
+    "GIT_NAMESPACE",
+)
+
+
+def _git_env() -> dict[str, str]:
+    env = {k: v for k, v in os.environ.items() if k not in _GIT_LOCATION_VARS}
+    env["GIT_CONFIG_NOSYSTEM"] = "1"
+    return env
+
+
+def _project_git(root: pathlib.Path, *args: str, timeout: int):
+    """Run git in the checked repository without the commands its own
+    .git/config can name: core.fsmonitor (git ls-files refreshes the index)
+    and hooks are turned off, and the system config is skipped."""
+    return subprocess.run(
+        [
+            "git",
+            "-c",
+            "core.fsmonitor=false",
+            "-c",
+            "core.hooksPath=/dev/null",
+            "-C",
+            str(root),
+            *args,
+        ],
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+        check=False,
+        env=_git_env(),
+    )
+
 
 def _expand_placeholders(text: str, lookup) -> str:
     """Expand ${VAR} / ${VAR:-default} with POSIX ``:-`` semantics — the default
@@ -109,11 +196,12 @@ class Ctx:
         if not p.is_file():
             return None
         try:
-            return yaml.load(
+            data = yaml.load(
                 p.read_text(encoding="utf-8", errors="replace"), Loader=loader
             )
         except yaml.YAMLError:
             return None
+        return data if _within_node_budget(data) else None
 
     def _json(self, rel: str, base: str = "root"):
         p = self._base(base) / rel
@@ -159,13 +247,7 @@ class Ctx:
         (then callers fall back to the .gitignore-text heuristic). The CI gate
         installs git so the strong check runs there — see .gitlab-ci.yml."""
         try:
-            r = subprocess.run(
-                ["git", "-C", str(self.root), "ls-files", "--error-unmatch", rel],
-                capture_output=True,
-                text=True,
-                timeout=10,
-                check=False,
-            )
+            r = _project_git(self.root, "ls-files", "--error-unmatch", rel, timeout=10)
             return r.returncode == 0
         except (FileNotFoundError, OSError, subprocess.SubprocessError):
             return None
@@ -177,13 +259,7 @@ class Ctx:
         if cached != "unset":
             return cached
         try:
-            r = subprocess.run(
-                ["git", "-C", str(self.root), "ls-files"],
-                capture_output=True,
-                text=True,
-                timeout=30,
-                check=False,
-            )
+            r = _project_git(self.root, "ls-files", timeout=30)
             self._ls_files_cache = r.stdout.splitlines() if r.returncode == 0 else None
         except (OSError, subprocess.SubprocessError):
             self._ls_files_cache = None
@@ -1181,10 +1257,12 @@ def main() -> int:
 
     score = round(100 * (max_possible - penalty) / max_possible) if max_possible else 0
 
-    print(f"\n  TYPO3 14 Gold — conformance report ({root.name})\n")
+    print(f"\n  TYPO3 14 Gold — conformance report ({_printable(root.name)})\n")
     for code, sev, status, detail in rows:
         color = {"PASS": GREEN, "FAIL": RED, "ADVISORY": DIM, "SKIP": YEL}[status]
-        print(f"  {color}{status:<8}{RST} {code:<11} {DIM}{sev:<7}{RST} {detail}")
+        print(
+            f"  {color}{status:<8}{RST} {code:<11} {DIM}{sev:<7}{RST} {_printable(detail)}"
+        )
 
     band = GREEN if score >= 90 else (YEL if score >= 70 else RED)
     print(

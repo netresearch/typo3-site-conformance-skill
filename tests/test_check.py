@@ -26,6 +26,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import unittest.mock
 
 try:
     import yaml  # noqa: F401  (imported by check.py; fail here with a clear message)
@@ -801,6 +802,87 @@ class EdgeCaseTest(_TempRepo):
                 ctx = check.Ctx(root)
                 self.assertFalse(check.c_sc011(ctx)[0])
                 self.assertFalse(check.c_sc001(ctx)[0])
+
+    def test_git_config_of_the_target_names_no_command_that_runs(self) -> None:
+        # The checked repository's own .git/config is input: a command it names
+        # for core.fsmonitor or a hook must not run while files are listed.
+        root = self.repo()
+        marker = pathlib.Path(self._tmp.name + ".fsmonitor-ran")
+        self.addCleanup(lambda: marker.unlink(missing_ok=True))
+        _git(root, "config", "core.fsmonitor", f"touch {marker}; false")
+        with (root / "README.md").open("a", encoding="utf-8") as f:
+            f.write("changed\n")
+        ctx = check.Ctx(root)
+        self.assertIn("README.md", ctx.git_ls_files())
+        self.assertIs(ctx.git_tracked("README.md"), True)
+        self.assertFalse(marker.exists(), "a command from the target's git config ran")
+
+    def test_inherited_git_location_variables_are_ignored(self) -> None:
+        # Run from a git hook, GIT_DIR and GIT_INDEX_FILE point at the calling
+        # repository; the checker must still answer for the target.
+        root = self.repo()
+        other = pathlib.Path(self._tmp.name + "-other")
+        other.mkdir()
+        self.addCleanup(shutil.rmtree, other, True)
+        _git(other, "init", "-q")
+        env = {
+            "GIT_DIR": str(other / ".git"),
+            "GIT_INDEX_FILE": str(other / ".git" / "index"),
+        }
+        with unittest.mock.patch.dict("os.environ", env):
+            ctx = check.Ctx(root)
+            self.assertIn("README.md", ctx.git_ls_files())
+            self.assertIs(ctx.git_tracked("README.md"), True)
+
+    def test_alias_expansion_beyond_the_budget_reads_as_malformed(self) -> None:
+        # Anchors and aliases are normal in compose and Concourse files (the gold
+        # pipeline uses them); a document whose aliases expand past the node
+        # budget is treated like a malformed one instead of being expanded.
+        levels = ["a0: &a0 [x, x, x, x, x, x, x, x, x, x]"]
+        for i in range(1, 6):
+            refs = ", ".join([f"*a{i - 1}"] * 10)
+            levels.append(f"a{i}: &a{i} [{refs}]")
+        nested = "\n".join(levels) + "\njobs:\n- name: j\n  plan: [*a5]\n"
+        recursive = "jobs: &j\n- name: j\n  plan: *j\n"
+        # Few nodes, but a long string repeated through aliases.
+        long_text = (
+            f"big: &big {'x' * 1_000_000}\n"
+            "jobs:\n- name: j\n  plan: [" + ", ".join(["*big"] * 20) + "]\n"
+        )
+        for name, text in (
+            ("nested", nested),
+            ("recursive", recursive),
+            ("long_text", long_text),
+        ):
+            with self.subTest(name), tempfile.TemporaryDirectory() as tmp:
+                root = pathlib.Path(tmp)
+                files = dict(GOLD)
+                files["ci/pipeline.yml"] = text
+                build_repo(root, files)
+                ctx = check.Ctx(root)
+                self.assertEqual(ctx.pipeline_doc, {})
+                self.assertFalse(check.c_sc001(ctx)[0])
+
+    def test_report_carries_no_control_characters_from_the_target(self) -> None:
+        # Text taken from the checked repository (its directory name, compose
+        # service names) is printed with control characters replaced, so it
+        # cannot drive the terminal.
+        osc = "\x1b]0;forged\x07"
+        root = self.root / f"site{osc}\u061c"
+        root.mkdir()
+        files = dict(GOLD)
+        files["compose.yaml"] = files["compose.yaml"].replace(
+            "services:\n",
+            'services:\n  "svc\\e]0;forged\\a":\n    image: alpine\n    depends_on: [db]\n',
+            1,
+        )
+        build_repo(root, files)
+        r = self.run_cli(root)
+        self.assertNotIn("\x1b]", r.stdout)
+        self.assertNotIn("\x07", r.stdout)
+        self.assertNotIn("\u061c", r.stdout)
+        self.assertIn("site?]0;forged??", r.stdout)
+        self.assertIn("svc?]0;forged? uses list-form depends_on", r.stdout)
 
     def test_renovate_allows_update_packages_job(self) -> None:
         mutate = _both(
