@@ -36,9 +36,9 @@ Boundary 1 lies between the checker and the target repository: file content is p
 ### 1. The checker treats the target as data
 
 - `check.py` reads files with `pathlib.Path.read_text` and `os.walk`; it has no call that writes a file, and it imports no network module (`json`, `os`, `pathlib`, `re`, `subprocess`, `sys`, `yaml`).
-- YAML is loaded with `yaml.SafeLoader` (`compose.yaml`) or with `_Loader`, a subclass that maps every unknown tag to `None` (`compose.override.yaml`, `ci/pipeline.yml`; `check.py`, `_Loader`), so a document cannot construct Python objects. A YAML or JSON syntax error makes the file count as absent instead of stopping the run; undecodable bytes are replaced.
-- The only external program is `git`, started with an argument list and no shell: `git -C <root> ls-files` and `git -C <root> ls-files --error-unmatch .env`, each with a timeout (`Ctx.git_tracked`, `Ctx.git_ls_files`).
-- The result is a report on standard output and the exit code; `tests/test_check.py` runs the command line against a fixture repository and asserts both.
+- YAML is loaded with `yaml.SafeLoader` (`compose.yaml`) or with `_Loader`, a subclass that maps every unknown tag to `None` (`compose.override.yaml`, `ci/pipeline.yml`; `check.py`, `_Loader`), so a document cannot construct Python objects. A YAML or JSON syntax error makes the file count as absent instead of stopping the run; undecodable bytes are replaced. A YAML document whose aliases expand to more than 100,000 nodes counts as absent too (`_within_node_budget`); the largest compose and Concourse files measured expand to about 1,100.
+- The only external program is `git`, started with an argument list and no shell: `git -C <root> ls-files` and `git -C <root> ls-files --error-unmatch .env`, each with a timeout (`Ctx.git_tracked`, `Ctx.git_ls_files`). Both run through `_project_git` with `core.fsmonitor=false`, `core.hooksPath=/dev/null` and `GIT_CONFIG_NOSYSTEM=1`, so a command the target's own `.git/config` names for these does not run.
+- The result is a report on standard output and the exit code; `tests/test_check.py` runs the command line against a fixture repository and asserts both. Text from the target in that report (its directory name, the details of a rule) is printed with control and bidirectional formatting characters replaced by `?` (`_printable`).
 
 ### 2. The catalogue is the reviewed catalogue
 
@@ -60,6 +60,9 @@ Boundary 1 lies between the checker and the target repository: file content is p
 |----------|---------------------|----------------|
 | CWE-502 deserialization of untrusted data | YAML in the target repository | `yaml.SafeLoader`, or its subclass `_Loader` in which unknown tags become `None` (`check.py`). |
 | CWE-78 OS command injection | Target path and file names | `git` is started with an argument list, no shell; no command string is built from input (`check.py`, `Ctx.git_tracked`, `Ctx.git_ls_files`). |
+| CWE-829 functionality from an untrusted control sphere | The target's `.git/config` (fsmonitor command, hooks) | `_project_git` turns both off and skips the system config; `tests/test_check.py` (`test_git_config_of_the_target_names_no_command_that_runs`). |
+| CWE-776 unbounded expansion of references | YAML aliases in the target | `_within_node_budget` treats a document above 100,000 expanded nodes as absent (`test_alias_expansion_beyond_the_budget_reads_as_malformed`). |
+| CWE-150 escape sequences in output | Target text in the report | `_printable` replaces control characters (`test_report_carries_no_control_characters_from_the_target`). |
 | CWE-94 code injection | PHP, YAML and Dockerfile content of the target | Content is matched with regular expressions and parsed as data; the checker does not `eval`, `exec` or import anything from the target. |
 | CWE-1104 unmaintained third-party components | PyYAML, GitHub Actions | PyYAML, the only third-party Python dependency, is declared in `check.py`'s PEP 723 block and resolved by the user's installer; the shared workflows this repository calls pin third-party actions by commit SHA. |
 | CWE-798 secret exposure | Commits to this repository | GitHub secret scanning with push protection is enabled for the repository. No script reads or stores credentials. |
