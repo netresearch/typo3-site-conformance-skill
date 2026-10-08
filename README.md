@@ -94,7 +94,8 @@ in `tests/test_check.py` that fails without it: for a new or changed rule, add
 its mutation to `MUTATIONS` and keep the gold fixture passing.
 
 The components and the checker's data flow are described in
-[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). [`AGENTS.md`](AGENTS.md) is
+the index for coding agents.
 
 ### Tests
 
@@ -137,14 +138,16 @@ workflow, with the runner's `python3`.
   `netresearch/composer-agent-skill-plugin`, which installs the skill into a
   Composer project. There is no lock file; the package is consumed as a
   library.
-- **CI:** the workflows call shared workflows in `netresearch/skill-repo-skill`
-  and `netresearch/.github` by `@main`; those pin third-party actions by commit
+- **CI:** the workflows call shared workflows in `netresearch/skill-repo-skill`,
+  `netresearch/.github` and (`security.yml`) `netresearch/typo3-ci-workflows`
+  by `@main`; those pin third-party actions by commit
   SHA and tools (ruff, ShellCheck, PyYAML) by version.
 - **Updates:** Renovate (`renovate.json`, `config:recommended`) opens update
   pull requests; Dependabot security updates are enabled for the repository.
   `auto-merge-deps.yml` approves and enables auto-merge for pull requests
   opened by `renovate[bot]` or `dependabot[bot]` without the `deps-major` or
-  `deps-no-automerge` label. A new dependency is added only when the standard
+  `deps-no-automerge` label; it passes the shared workflow the
+  `PROJECT_APP_ID` and `PROJECT_APP_PRIVATE_KEY` secrets. A new dependency is added only when the standard
   library cannot do the job, and is declared where its consumer reads it (the
   PEP 723 block for the checker, `composer.json` for Composer).
 
@@ -174,6 +177,19 @@ Checks that run on pull requests in this repository:
   yamllint, actionlint, JSON syntax, ShellCheck at severity `style`, ruff check
   and ruff format, checkpoint schema.
 - Eval Validation (`eval-validate.yml`) and Skill Tests (`tests.yml`).
+- Security (`security.yml`): Betterleaks secret scanning of the git history,
+  zizmor on the workflow files, Dependency Review (pull requests only), and
+  Composer Audit plus Opengrep SAST through the shared workflow in
+  `netresearch/typo3-ci-workflows`. The SAST rules are in the organisation's
+  [static analysis rule](https://github.com/netresearch/.github/blob/main/SECURITY.md#static-analysis-sast).
+- Template Drift (`check-template-drift.yml`): fails when a file governed by
+  the `skill` template differs from it; `.github/template.yaml` lists the
+  intentional exception (`lint.yml`).
+- Harness Verification (`harness-verify.yml`): checks [`AGENTS.md`](AGENTS.md)
+  through the `skill-repo-skill` reusable workflow.
+- Labeler (`labeler.yml`): applies labels from `.github/labeler.yml` on
+  `pull_request_target` through a shared workflow in `netresearch/.github`,
+  without checking out pull request code.
 - DCO: every commit carries a `Signed-off-by` trailer.
 - CodeQL default setup (a repository setting, not a workflow file) analyses
   the GitHub Actions workflows and the Python code with the extended query
@@ -183,9 +199,11 @@ Checks that run on pull requests in this repository:
   review that the repository ruleset requests.
 - Auto-merge dependency PRs (`auto-merge-deps.yml`), which acts only on
   Renovate and Dependabot pull requests.
-- No workflow here runs dependency review, a dependency audit, Opengrep or
-  Betterleaks. Secret detection is GitHub secret scanning with push
-  protection, which is enabled for this repository.
+
+OpenSSF Scorecard (`scorecard.yml`) does not run on pull requests: it runs on
+pushes to `main` and `master`, weekly and on manual dispatch. GitHub secret
+scanning with push protection is enabled for this repository in addition to
+the Betterleaks scan.
 
 ## License
 

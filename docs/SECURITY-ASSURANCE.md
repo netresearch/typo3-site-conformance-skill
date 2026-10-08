@@ -52,7 +52,7 @@ Boundary 1 lies between the checker and the target repository: file content is p
 
 ### 4. Pull requests run automated checks
 
-`lint.yml`, `eval-validate.yml` and `tests.yml` grant `contents: read` only. `auto-merge-deps.yml` runs on `pull_request_target` and calls the shared workflow in `netresearch/.github`, which contains no checkout step and runs no pull request code; this repository passes it no secrets. The checks themselves are listed in [README.md](../README.md#governance-and-policies).
+`lint.yml`, `eval-validate.yml` and `tests.yml` grant `contents: read` only. `auto-merge-deps.yml` and `labeler.yml` run on `pull_request_target` and call shared workflows in `netresearch/.github`; the auto-merge workflow contains no checkout step and runs no pull request code, and `labeler.yml` applies labels without checking out pull request code. This repository passes the auto-merge workflow the `PROJECT_APP_ID` and `PROJECT_APP_PRIVATE_KEY` secrets and passes `labeler.yml` none. The checks themselves are listed in [README.md](../README.md#governance-and-policies).
 
 ## Common weaknesses
 
@@ -65,7 +65,7 @@ Boundary 1 lies between the checker and the target repository: file content is p
 | CWE-150 escape sequences in output | Target text in the report | `_printable` replaces control characters (`test_report_carries_no_control_characters_from_the_target`). |
 | CWE-94 code injection | PHP, YAML and Dockerfile content of the target | Content is matched with regular expressions and parsed as data; the checker does not `eval`, `exec` or import anything from the target. |
 | CWE-1104 unmaintained third-party components | PyYAML, GitHub Actions | PyYAML, the only third-party Python dependency, is declared in `check.py`'s PEP 723 block and resolved by the user's installer; the shared workflows this repository calls pin third-party actions by commit SHA. |
-| CWE-798 secret exposure | Commits to this repository | GitHub secret scanning with push protection is enabled for the repository. No script reads or stores credentials. |
+| CWE-798 secret exposure | Commits to this repository | GitHub secret scanning with push protection is enabled for the repository, and `security.yml` runs Betterleaks over the git history. No script reads or stores credentials. |
 
 ## What the skill does not protect against
 
