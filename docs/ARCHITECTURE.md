@@ -55,4 +55,4 @@ The checker writes no file and opens no network connection. `gen_rules.py` write
 | PyYAML | `check.py` | PEP 723 block in `check.py` (`PyYAML>=6`) |
 | git | `check.py` (optional) | README.md, this document |
 | `netresearch/composer-agent-skill-plugin` | Composer installation of the skill | `composer.json` |
-| Shared workflows in `netresearch/skill-repo-skill` and `netresearch/.github` | CI and releases | `.github/workflows/*.yml` |
+| Shared workflows in `netresearch/skill-repo-skill`, `netresearch/.github` and `netresearch/typo3-ci-workflows` | CI and releases | `.github/workflows/*.yml` |
