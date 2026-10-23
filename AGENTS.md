@@ -39,7 +39,7 @@ composer.json             Composer distribution metadata
 - Change a rule in `checker/gen_rules.py`, then regenerate `rules.json`; a change to `check.py` or `gen_rules.py` comes with a test in `tests/test_check.py` that fails without it ([README.md](README.md#contributing)).
 - The workflow files that also exist in the `skill` template of `netresearch/.github` are governed by it; `.github/template.yaml` lists the intentional exception (`lint.yml`, ShellCheck severity `style`). Template Drift fails when a governed file differs.
 - Reusable workflows are called by `@main` from `netresearch/.github`, `netresearch/skill-repo-skill` and `netresearch/typo3-ci-workflows`.
-- Branch protection on `main` requires the checks `Skill Validation / Skill Validation`, `Analyze (actions)`, `DCO` and `tests / Skill Tests` (read with `gh api repos/netresearch/typo3-site-conformance-skill/branches/main/protection`); commits carry a `Signed-off-by` trailer (`git commit -s`).
+- Branch protection on `main` requires the checks `Skill Validation / Skill Validation`, `DCO` and `tests / Skill Tests` (read with `gh api repos/netresearch/typo3-site-conformance-skill/branches/main/protection` on 2026-10-23), and a repository ruleset blocks a merge on CodeQL security alerts of severity high or higher and on CodeQL alerts of level error; commits carry a `Signed-off-by` trailer (`git commit -s`).
 
 ## References
 
