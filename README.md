@@ -191,9 +191,8 @@ Checks that run on pull requests in this repository:
   `pull_request_target` through a shared workflow in `netresearch/.github`,
   without checking out pull request code.
 - DCO: every commit carries a `Signed-off-by` trailer.
-- CodeQL default setup (a repository setting, not a workflow file) analyses
-  the GitHub Actions workflows and the Python code with the extended query
-  suite.
+- CodeQL (the `codeql` job of `security.yml`) analyses the GitHub Actions
+  workflows and the Python code with the `security-and-quality` query suite.
 - SonarCloud analysis (configured outside the workflows); on pull requests to
   `main` that are not drafts, also the CodeRabbit review and the Copilot code
   review that the repository ruleset requests.
