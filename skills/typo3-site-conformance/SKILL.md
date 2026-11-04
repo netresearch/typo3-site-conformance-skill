@@ -62,5 +62,6 @@ Netresearch-internal and optional. Propose rule changes in `gen_rules.py`.
 See `references/migration-from-reference.md` for migrating a legacy
 `support/typo3-NN/app` repo (app/ wrapper, `build/config`, secrets, Redis,
 `:latest`). `references/sealed-settings-php.md` covers the read-only
-`settings.php`. `references/database-seeds.md` covers `data/*.sql` seeds with
+`settings.php` and which readers do not see values set in `additional.php`.
+`references/database-seeds.md` covers `data/*.sql` seeds with
 fixed uids: silent `INSERT IGNORE`, uid bands, translation pids.
