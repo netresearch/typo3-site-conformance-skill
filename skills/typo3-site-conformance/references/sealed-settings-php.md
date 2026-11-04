@@ -66,3 +66,25 @@ dirty working tree.
 
 To edit the file intentionally: `chmod u+w`, edit, re-run the install (which
 re-seals).
+
+## A value set in additional.php is not visible to every reader
+
+`additional.php` is applied on top of `$GLOBALS['TYPO3_CONF_VARS']` at boot.
+It is not part of what `ConfigurationManager::getMergedLocalConfiguration()`
+returns: that is `getDefaultConfiguration()` merged with
+`getLocalConfiguration()`, which is `require settings.php` (cms-core 14.3.10).
+So a setting moved from `settings.php` into `additional.php` — for example to
+make it env-driven — reaches code that reads `$GLOBALS` (such as
+`ExtensionConfiguration::get()`) and silently disappears for code that reads
+the merged local configuration. That code then sees the core default from
+`DefaultConfiguration.php`, or no key at all (`ArrayUtility::getValueByPath()`
+throws `MissingArrayPathException`), and whatever default or fallback it
+applies then may fail open.
+
+**Rule:** before moving a key into `additional.php`, find the line in each
+consumer that reads it. Verify the move with a probe that runs that consumer's
+own expression (for example `getMergedLocalConfiguration()` plus
+`ArrayUtility::getValueByPath()`) against the produced files, and once more
+against a layout known not to deliver the value (the key removed): if that
+negative control also passes, the probe measures nothing.
+"The file parses and contains the value" tests the writer, not the reader.
