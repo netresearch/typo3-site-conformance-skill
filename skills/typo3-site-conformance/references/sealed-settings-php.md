@@ -76,12 +76,15 @@ returns: that is `getDefaultConfiguration()` merged with
 So a setting moved from `settings.php` into `additional.php` — for example to
 make it env-driven — reaches code that reads `$GLOBALS` (such as
 `ExtensionConfiguration::get()`) and silently disappears for code that reads
-the merged local configuration. Such code falls back to its own default,
-which may fail open.
+the merged local configuration. That code then sees the core default from
+`DefaultConfiguration.php`, or no key at all (`ArrayUtility::getValueByPath()`
+throws `MissingArrayPathException`), and whatever default or fallback it
+applies then may fail open.
 
 **Rule:** before moving a key into `additional.php`, find the line in each
 consumer that reads it. Verify the move with a probe that runs that consumer's
 own expression (for example `getMergedLocalConfiguration()` plus
-`ArrayUtility::getValueByPath()`) against the produced files, with the old
-layout as a control: if the control also passes, the probe measures nothing.
+`ArrayUtility::getValueByPath()`) against the produced files, and once more
+against a layout known not to deliver the value (the key removed): if that
+negative control also passes, the probe measures nothing.
 "The file parses and contains the value" tests the writer, not the reader.
